@@ -35,6 +35,40 @@ create table public.profiles (
 create index profiles_username_idx on public.profiles (username);
 
 -- ----------------------------------------------------------------------------
+-- Auto-create a profile row whenever a new auth.users row is inserted.
+--
+-- `supabase.auth.signUp()` on the client does not always return an
+-- authenticated session synchronously (e.g. when email confirmation is
+-- required), so a client-side `insert into profiles` right after signUp can
+-- run unauthenticated and get rejected by RLS ("new row violates row-level
+-- security policy for table profiles"). Provisioning the profile here
+-- instead — in a trigger that runs as the function owner (`security
+-- definer`), bypassing RLS — means it always succeeds regardless of session
+-- state. The app no longer needs to insert into `profiles` itself; it can
+-- just read the row this trigger created.
+-- ----------------------------------------------------------------------------
+create function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, username, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
+    coalesce((new.raw_user_meta_data ->> 'role')::public.user_role, 'collector')
+  );
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ----------------------------------------------------------------------------
 -- cards
 -- A single physical card owned by a profile.
 -- ----------------------------------------------------------------------------

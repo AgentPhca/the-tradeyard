@@ -28,7 +28,7 @@ export default function RegisterPage() {
     setLoading(true);
     setError(null);
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { username, role } },
@@ -40,18 +40,9 @@ export default function RegisterPage() {
       return;
     }
 
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({ id: data.user.id, username, role });
-
-      if (profileError) {
-        setError(profileError.message);
-        setLoading(false);
-        return;
-      }
-    }
-
+    // The `on_auth_user_created` trigger (see lib/supabase/schema.sql)
+    // provisions the matching `profiles` row server-side, so there's
+    // nothing left for the client to insert here.
     router.push("/dashboard");
     router.refresh();
   }
