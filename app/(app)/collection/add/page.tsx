@@ -10,11 +10,21 @@ import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { CARD_SETS, PARALLELS, AUTO_PARALLELS, CONDITIONS } from "@/lib/data/cardCatalog";
-import type { CardCatalogEntry, CardStatus } from "@/lib/types/database";
+import { titleCase } from "@/lib/utils/text";
+import type { CardCatalogEntry, CardCatalogInsertSet, CardStatus } from "@/lib/types/database";
 
 type CatalogMatch = Pick<
   CardCatalogEntry,
-  "id" | "player_name" | "team" | "set_name" | "card_number" | "category"
+  | "id"
+  | "player_name"
+  | "team"
+  | "set_name"
+  | "card_number"
+  | "category"
+  | "insert_set"
+  | "is_variation_of_base"
+  | "is_autograph"
+  | "is_relic"
 >;
 
 export default function AddCardPage() {
@@ -24,10 +34,14 @@ export default function AddCardPage() {
   const [playerName, setPlayerName] = useState("");
   const [team, setTeam] = useState("");
   const [setName, setSetName] = useState("");
+  const [insertSet, setInsertSet] = useState("");
+  const [isVariationOfBase, setIsVariationOfBase] = useState(false);
   const [parallel, setParallel] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [printRun, setPrintRun] = useState("");
   const [condition, setCondition] = useState("");
+  const [isAutograph, setIsAutograph] = useState(false);
+  const [isRelic, setIsRelic] = useState(false);
   const [status, setStatus] = useState<CardStatus>("personal_collection");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -36,7 +50,9 @@ export default function AddCardPage() {
 
   const [catalogMatches, setCatalogMatches] = useState<CatalogMatch[]>([]);
   const [showMatches, setShowMatches] = useState(false);
+  const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
   const suppressLookup = useRef(false);
+  const suppressSetReset = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -60,7 +76,9 @@ export default function AddCardPage() {
     const timeout = setTimeout(async () => {
       const { data } = await supabase
         .from("card_catalog")
-        .select("id, player_name, team, set_name, card_number, category")
+        .select(
+          "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_autograph, is_relic"
+        )
         .ilike("player_name", `%${playerName.trim()}%`)
         .order("player_name")
         .limit(8);
@@ -72,13 +90,65 @@ export default function AddCardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerName]);
 
+  // Populate the Insert Set dropdown from the real checklist data, scoped
+  // to whichever Set is currently chosen.
+  useEffect(() => {
+    if (!setName) {
+      setInsertSetOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await supabase
+        .from("card_catalog_insert_sets")
+        .select("set_name, insert_set, category, is_variation_of_base, is_autograph, is_relic")
+        .eq("set_name", setName)
+        .order("insert_set");
+      if (!cancelled) setInsertSetOptions(data ?? []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setName]);
+
+  // Changing the Set manually (not via a catalog pick) means the previous
+  // Insert Set / Auto / Relic selections no longer apply.
+  useEffect(() => {
+    if (suppressSetReset.current) {
+      suppressSetReset.current = false;
+      return;
+    }
+    setInsertSet("");
+    setIsAutograph(false);
+    setIsRelic(false);
+    setIsVariationOfBase(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setName]);
+
   function selectCatalogMatch(match: CatalogMatch) {
     suppressLookup.current = true;
+    suppressSetReset.current = true;
     setPlayerName(match.player_name);
     setTeam(match.team ?? "");
     setSetName(match.set_name);
+    setInsertSet(match.insert_set ?? "");
+    setIsAutograph(match.is_autograph);
+    setIsRelic(match.is_relic);
+    setIsVariationOfBase(match.is_variation_of_base);
     setShowMatches(false);
     setCatalogMatches([]);
+  }
+
+  function handleInsertSetChange(value: string) {
+    setInsertSet(value);
+    const option = insertSetOptions.find((o) => o.insert_set === value);
+    setIsAutograph(option?.is_autograph ?? false);
+    setIsRelic(option?.is_relic ?? false);
+    setIsVariationOfBase(option?.is_variation_of_base ?? false);
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -127,10 +197,14 @@ export default function AddCardPage() {
       player_name: playerName,
       team: team || null,
       set_name: setName || null,
+      insert_set: insertSet || null,
+      is_variation_of_base: isVariationOfBase,
       parallel: parallel || null,
       serial_number: serialNumber || null,
       print_run: printRun ? Number(printRun) : null,
       condition: condition || null,
+      is_autograph: isAutograph,
+      is_relic: isRelic,
       status,
       image_url: imageUrl,
     });
@@ -230,7 +304,9 @@ export default function AddCardPage() {
                       </span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className="block truncate text-xs text-text">{match.set_name}</span>
+                      <span className="block truncate text-xs text-text">
+                        {match.insert_set ? titleCase(match.insert_set) : match.set_name}
+                      </span>
                       <span className="block text-xs text-muted">
                         {match.card_number ? `#${match.card_number}` : "No card #"}
                       </span>
@@ -270,6 +346,46 @@ export default function AddCardPage() {
               ))}
             </Select>
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="insertSet" className="mb-1.5 block text-sm font-medium text-text">
+            Insert Set
+          </label>
+          <Select
+            id="insertSet"
+            value={insertSet}
+            onChange={(e) => handleInsertSetChange(e.target.value)}
+            disabled={!setName}
+          >
+            <option value="">{setName ? "Base (no insert set)" : "Select a set first"}</option>
+            {insertSetOptions.map((option) => (
+              <option key={option.insert_set} value={option.insert_set}>
+                {titleCase(option.insert_set)}
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isAutograph}
+              onChange={(e) => setIsAutograph(e.target.checked)}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Autographed
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isRelic}
+              onChange={(e) => setIsRelic(e.target.checked)}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Relic / patch
+          </label>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

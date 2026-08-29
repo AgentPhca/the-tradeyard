@@ -18,10 +18,14 @@ export type Card = {
   player_name: string;
   team: string | null;
   set_name: string | null;
+  insert_set: string | null;
+  is_variation_of_base: boolean;
   parallel: string | null;
   serial_number: string | null;
   print_run: number | null;
   condition: string | null;
+  is_autograph: boolean;
+  is_relic: boolean;
   status: CardStatus;
   image_url: string | null;
   notes: string | null;
@@ -87,6 +91,15 @@ export type CardCatalogEntry = {
   source_file: string | null;
   source_page: number | null;
   raw_line: string | null;
+};
+
+export type CardCatalogInsertSet = {
+  set_name: string;
+  insert_set: string;
+  category: string | null;
+  is_variation_of_base: boolean;
+  is_autograph: boolean;
+  is_relic: boolean;
 };
 
 export interface Database {
@@ -217,7 +230,12 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      card_catalog_insert_sets: {
+        Row: CardCatalogInsertSet;
+        Relationships: [];
+      };
+    };
     Functions: Record<string, never>;
   };
 }

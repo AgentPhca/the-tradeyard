@@ -71,6 +71,13 @@ create trigger on_auth_user_created
 -- ----------------------------------------------------------------------------
 -- cards
 -- A single physical card owned by a profile.
+--
+-- insert_set / is_variation_of_base / is_autograph / is_relic mirror the
+-- same-named columns on card_catalog (see card_catalog.sql) — real
+-- attributes extracted from the Topps checklists, e.g. insert_set holds
+-- names like "Chrome Radiating Rookies" or "Base Cards Team Camo
+-- Variation". parallel/serial_number/print_run stay free text/number since
+-- the checklists carry no parallel names or print runs at all.
 -- ----------------------------------------------------------------------------
 create table public.cards (
   id uuid primary key default gen_random_uuid(),
@@ -78,10 +85,14 @@ create table public.cards (
   player_name text not null,
   team text,
   set_name text,
+  insert_set text,
+  is_variation_of_base boolean not null default false,
   parallel text,
   serial_number text,
   print_run integer,
   condition text,
+  is_autograph boolean not null default false,
+  is_relic boolean not null default false,
   status public.card_status not null default 'personal_collection',
   image_url text,
   notes text,
