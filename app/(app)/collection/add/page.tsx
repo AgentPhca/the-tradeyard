@@ -11,7 +11,12 @@ import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { CARD_SETS, PARALLELS, AUTO_PARALLELS, CONDITIONS } from "@/lib/data/cardCatalog";
 import { titleCase } from "@/lib/utils/text";
-import type { CardCatalogEntry, CardCatalogInsertSet, CardStatus } from "@/lib/types/database";
+import type {
+  CardCatalogEntry,
+  CardCatalogInsertSet,
+  CardStatus,
+  UserRole,
+} from "@/lib/types/database";
 
 type CatalogMatch = Pick<
   CardCatalogEntry,
@@ -170,6 +175,35 @@ export default function AddCardPage() {
       setError("You need to be logged in to add a card.");
       setSubmitting(false);
       return;
+    }
+
+    // cards.owner_id references profiles(id), not auth.users(id) directly.
+    // Accounts created before the on_auth_user_created trigger existed
+    // (see schema.sql) have a user in auth.users but no matching profiles
+    // row, which would otherwise fail the insert below with a foreign key
+    // violation. Self-heal by provisioning the missing profile here.
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!existingProfile) {
+      const fallbackUsername = user.email
+        ? `${user.email.split("@")[0]}-${user.id.slice(0, 6)}`
+        : `user-${user.id.slice(0, 8)}`;
+
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: user.id,
+        username: (user.user_metadata?.username as string | undefined) || fallbackUsername,
+        role: (user.user_metadata?.role as UserRole | undefined) || "collector",
+      });
+
+      if (profileError) {
+        setError(profileError.message);
+        setSubmitting(false);
+        return;
+      }
     }
 
     let imageUrl: string | null = null;
