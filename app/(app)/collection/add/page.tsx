@@ -1,16 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ImagePlus } from "lucide-react";
+import { ArrowLeft, ImagePlus, Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { CARD_SETS, PARALLELS, CONDITIONS } from "@/lib/data/cardCatalog";
-import type { CardStatus } from "@/lib/types/database";
+import type { CardCatalogEntry, CardStatus } from "@/lib/types/database";
+
+type CatalogMatch = Pick<
+  CardCatalogEntry,
+  "id" | "player_name" | "team" | "set_name" | "card_number" | "category"
+>;
 
 export default function AddCardPage() {
   const router = useRouter();
@@ -21,6 +26,7 @@ export default function AddCardPage() {
   const [setName, setSetName] = useState("");
   const [parallel, setParallel] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
+  const [printRun, setPrintRun] = useState("");
   const [condition, setCondition] = useState("");
   const [status, setStatus] = useState<CardStatus>("personal_collection");
   const [photo, setPhoto] = useState<File | null>(null);
@@ -28,11 +34,52 @@ export default function AddCardPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [catalogMatches, setCatalogMatches] = useState<CatalogMatch[]>([]);
+  const [showMatches, setShowMatches] = useState(false);
+  const suppressLookup = useRef(false);
+
   useEffect(() => {
     return () => {
       if (photoPreview) URL.revokeObjectURL(photoPreview);
     };
   }, [photoPreview]);
+
+  // Look up the player against the real Topps checklist (card_catalog) as
+  // the user types, so picking a match can auto-fill team + set instead of
+  // typing them by hand.
+  useEffect(() => {
+    if (suppressLookup.current) {
+      suppressLookup.current = false;
+      return;
+    }
+    if (playerName.trim().length < 3) {
+      setCatalogMatches([]);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      const { data } = await supabase
+        .from("card_catalog")
+        .select("id, player_name, team, set_name, card_number, category")
+        .ilike("player_name", `%${playerName.trim()}%`)
+        .order("player_name")
+        .limit(8);
+      setCatalogMatches(data ?? []);
+      setShowMatches(true);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerName]);
+
+  function selectCatalogMatch(match: CatalogMatch) {
+    suppressLookup.current = true;
+    setPlayerName(match.player_name);
+    setTeam(match.team ?? "");
+    setSetName(match.set_name);
+    setShowMatches(false);
+    setCatalogMatches([]);
+  }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -82,6 +129,7 @@ export default function AddCardPage() {
       set_name: setName || null,
       parallel: parallel || null,
       serial_number: serialNumber || null,
+      print_run: printRun ? Number(printRun) : null,
       condition: condition || null,
       status,
       image_url: imageUrl,
@@ -146,17 +194,44 @@ export default function AddCardPage() {
           />
         </div>
 
-        <div>
+        <div className="relative">
           <label htmlFor="playerName" className="mb-1.5 block text-sm font-medium text-text">
             Player name
           </label>
-          <Input
-            id="playerName"
-            required
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            placeholder="e.g. Ja'Marr Chase"
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              id="playerName"
+              required
+              autoComplete="off"
+              className="pl-9"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              onFocus={() => catalogMatches.length > 0 && setShowMatches(true)}
+              onBlur={() => setTimeout(() => setShowMatches(false), 150)}
+              placeholder="Search the 2025/2026 Topps checklist..."
+            />
+          </div>
+          {showMatches && catalogMatches.length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+              {catalogMatches.map((match) => (
+                <li key={match.id}>
+                  <button
+                    type="button"
+                    onMouseDown={() => selectCatalogMatch(match)}
+                    className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-card"
+                  >
+                    <span className="font-medium text-text">{match.player_name}</span>
+                    <span className="text-xs text-muted">
+                      {[match.team, match.set_name, match.card_number && `#${match.card_number}`]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -181,8 +256,8 @@ export default function AddCardPage() {
             <Select id="setName" value={setName} onChange={(e) => setSetName(e.target.value)}>
               <option value="">Select a set</option>
               {CARD_SETS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </Select>
@@ -212,12 +287,26 @@ export default function AddCardPage() {
               id="serialNumber"
               value={serialNumber}
               onChange={(e) => setSerialNumber(e.target.value)}
-              placeholder="e.g. 12/99"
+              placeholder="e.g. 12"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="printRun" className="mb-1.5 block text-sm font-medium text-text">
+              Print run
+            </label>
+            <Input
+              id="printRun"
+              type="number"
+              min={1}
+              value={printRun}
+              onChange={(e) => setPrintRun(e.target.value)}
+              placeholder="e.g. 99"
+            />
+          </div>
+
           <div>
             <label htmlFor="condition" className="mb-1.5 block text-sm font-medium text-text">
               Condition
@@ -235,20 +324,20 @@ export default function AddCardPage() {
               ))}
             </Select>
           </div>
+        </div>
 
-          <div>
-            <label htmlFor="status" className="mb-1.5 block text-sm font-medium text-text">
-              Status
-            </label>
-            <Select
-              id="status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as CardStatus)}
-            >
-              <option value="personal_collection">Personal Collection</option>
-              <option value="for_trade">For Trade</option>
-            </Select>
-          </div>
+        <div>
+          <label htmlFor="status" className="mb-1.5 block text-sm font-medium text-text">
+            Status
+          </label>
+          <Select
+            id="status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as CardStatus)}
+          >
+            <option value="personal_collection">Personal Collection</option>
+            <option value="for_trade">For Trade</option>
+          </Select>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

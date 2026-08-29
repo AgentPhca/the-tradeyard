@@ -66,6 +66,29 @@ export type Wishlist = {
   created_at: string;
 };
 
+export type CardCatalogEntry = {
+  id: string;
+  set_name: string;
+  insert_set: string | null;
+  parallel: string | null;
+  player_name: string;
+  team: string | null;
+  card_number: string | null;
+  is_rookie: boolean;
+  print_run: number | null;
+  product_year: number | null;
+  category: string | null;
+  class_segment: string | null;
+  is_variation_of_base: boolean;
+  is_autograph: boolean;
+  is_relic: boolean;
+  qualifier: string | null;
+  needs_review: boolean;
+  source_file: string | null;
+  source_page: number | null;
+  raw_line: string | null;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -185,6 +208,13 @@ export interface Database {
             referencedColumns: ["id"];
           },
         ];
+      };
+      card_catalog: {
+        Row: CardCatalogEntry;
+        Insert: Partial<CardCatalogEntry> &
+          Pick<CardCatalogEntry, "set_name" | "player_name">;
+        Update: Partial<CardCatalogEntry>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
