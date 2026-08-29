@@ -6,6 +6,10 @@ import type { Card } from "@/lib/types/database";
 export default async function MarketplacePage() {
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data } = await supabase
     .from("cards")
     .select("*")
@@ -31,7 +35,7 @@ export default async function MarketplacePage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {cards.map((card) => (
-            <TradingCard key={card.id} card={card} />
+            <TradingCard key={card.id} card={card} isOwner={card.owner_id === user?.id} />
           ))}
         </div>
       )}

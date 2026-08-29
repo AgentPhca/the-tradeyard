@@ -1,20 +1,51 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
-import { ImageOff, MessageCircle, PenLine, Shirt } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ImageOff, MessageCircle, Pencil, PenLine, Shirt, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { createClient } from "@/lib/supabase/client";
 import { titleCase } from "@/lib/utils/text";
 import type { Card as CardData } from "@/lib/types/database";
 
 interface TradingCardProps {
   card: CardData;
+  isOwner?: boolean;
 }
 
-export function TradingCard({ card }: TradingCardProps) {
+export function TradingCard({ card, isOwner = false }: TradingCardProps) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const forTrade = card.status === "for_trade";
   const serial =
     card.serial_number && card.print_run
       ? `${card.serial_number}/${card.print_run}`
       : card.serial_number ?? (card.print_run ? `/${card.print_run}` : null);
   const insertSetLabel = card.insert_set ? titleCase(card.insert_set) : null;
+
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+
+    const { error } = await supabase.from("cards").delete().eq("id", card.id);
+
+    if (error) {
+      setDeleteError(error.message);
+      setDeleting(false);
+      return;
+    }
+
+    setDeleting(false);
+    setConfirmOpen(false);
+    router.refresh();
+  }
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
@@ -30,6 +61,25 @@ export function TradingCard({ card }: TradingCardProps) {
         ) : (
           <div className="flex h-full w-full items-center justify-center">
             <ImageOff className="h-8 w-8 text-muted" />
+          </div>
+        )}
+        {isOwner && (
+          <div className="absolute left-2 top-2 flex gap-1">
+            <Link
+              href={`/collection/${card.id}/edit`}
+              title="Edit card"
+              className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Link>
+            <button
+              type="button"
+              title="Delete card"
+              onClick={() => setConfirmOpen(true)}
+              className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-red-400"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
         <div className="absolute right-2 top-2">
@@ -80,6 +130,24 @@ export function TradingCard({ card }: TradingCardProps) {
           </button>
         )}
       </div>
+
+      {isOwner && (
+        <ConfirmDialog
+          open={confirmOpen}
+          title="Delete this card?"
+          description={
+            <>
+              This will permanently remove {card.player_name} from your collection. This can’t
+              be undone.
+              {deleteError && <span className="mt-2 block text-red-400">{deleteError}</span>}
+            </>
+          }
+          confirmLabel="Delete"
+          confirming={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }

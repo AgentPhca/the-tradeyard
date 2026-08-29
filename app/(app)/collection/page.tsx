@@ -45,7 +45,7 @@ export default async function CollectionPage() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {cards.map((card) => (
-            <TradingCard key={card.id} card={card} />
+            <TradingCard key={card.id} card={card} isOwner={card.owner_id === user?.id} />
           ))}
         </div>
       )}
