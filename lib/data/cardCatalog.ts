@@ -5,12 +5,14 @@
 // card_catalog_import.sql) — real data, not a placeholder. Note there is no
 // "Chrome Black" set in that checklist.
 //
-// PARALLELS and CONDITIONS remain generic suggestions: the source checklist
-// does not include parallel names or print runs at all (every `parallel`
-// and `print_run` value in the import is null — that data lives in a
-// separate part of the Topps checklists that wasn't captured), so those two
-// stay free text / generic dropdowns on the card itself rather than
-// catalog-driven.
+// PARALLELS: the imported checklist has no parallel data at all (every
+// `parallel` value is null — that data lives in a separate part of the
+// Topps checklists that wasn't captured), so this list is a manually
+// curated set of the most common 2025 Topps Chrome-family parallels
+// instead of being catalog-driven. AUTO_PARALLELS mirrors each entry as
+// its autographed version.
+//
+// CONDITIONS is likewise a generic, non-catalog-driven suggestion list.
 
 export const CARD_SETS = [
   "2025 Topps Chrome Football",
@@ -23,21 +25,20 @@ export const CARD_SETS = [
 
 export const PARALLELS = [
   "Base",
-  "Refractor",
-  "X-Fractor",
+  "Silver Refractor",
+  "Gold Refractor /50",
+  "Orange Refractor /25",
+  "Red Refractor /10",
+  "SuperFractor /1",
+  "Teal Refractor /199",
+  "Blue Refractor /150",
+  "Purple Refractor /99",
+  "Aqua Refractor /75",
+  "Negative Refractor",
   "Prism Refractor",
-  "Green Refractor",
-  "Blue Refractor",
-  "Purple Refractor",
-  "Pink Refractor",
-  "Gold Refractor",
-  "Orange Refractor",
-  "Red Refractor",
-  "Sepia Refractor",
-  "Black Refractor",
-  "SuperFractor",
-  "Printing Plate",
 ] as const;
+
+export const AUTO_PARALLELS = PARALLELS.map((p) => `${p} Auto`);
 
 export const CONDITIONS = [
   "Raw",

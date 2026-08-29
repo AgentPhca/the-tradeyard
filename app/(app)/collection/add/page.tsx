@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
-import { CARD_SETS, PARALLELS, CONDITIONS } from "@/lib/data/cardCatalog";
+import { CARD_SETS, PARALLELS, AUTO_PARALLELS, CONDITIONS } from "@/lib/data/cardCatalog";
 import type { CardCatalogEntry, CardStatus } from "@/lib/types/database";
 
 type CatalogMatch = Pick<
@@ -213,19 +213,27 @@ export default function AddCardPage() {
             />
           </div>
           {showMatches && catalogMatches.length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-border bg-surface shadow-lg">
+            <ul className="absolute z-10 mt-1 max-h-80 w-full overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
               {catalogMatches.map((match) => (
                 <li key={match.id}>
                   <button
                     type="button"
                     onMouseDown={() => selectCatalogMatch(match)}
-                    className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-card"
+                    className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-card"
                   >
-                    <span className="font-medium text-text">{match.player_name}</span>
-                    <span className="text-xs text-muted">
-                      {[match.team, match.set_name, match.card_number && `#${match.card_number}`]
-                        .filter(Boolean)
-                        .join(" · ")}
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-text">
+                        {match.player_name}
+                      </span>
+                      <span className="block truncate text-xs text-muted">
+                        {match.team ?? "Team unknown"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block truncate text-xs text-text">{match.set_name}</span>
+                      <span className="block text-xs text-muted">
+                        {match.card_number ? `#${match.card_number}` : "No card #"}
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -271,11 +279,20 @@ export default function AddCardPage() {
             </label>
             <Select id="parallel" value={parallel} onChange={(e) => setParallel(e.target.value)}>
               <option value="">Select a parallel</option>
-              {PARALLELS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
+              <optgroup label="Parallels">
+                {PARALLELS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Autograph parallels">
+                {AUTO_PARALLELS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </optgroup>
             </Select>
           </div>
 
