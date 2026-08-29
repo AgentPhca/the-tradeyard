@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Plus } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { TradingCard } from "@/components/cards/TradingCard";
@@ -19,6 +21,10 @@ export default async function ProfilePage({
   const { username } = await params;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
@@ -28,6 +34,8 @@ export default async function ProfilePage({
   if (!profile) {
     notFound();
   }
+
+  const isOwnProfile = user?.id === profile.id;
 
   const { data } = await supabase
     .from("cards")
@@ -52,7 +60,15 @@ export default async function ProfilePage({
       </div>
 
       <div className="mt-8">
-        <h2 className="mb-4 text-lg font-semibold text-text">Collection</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-text">Collection</h2>
+          {isOwnProfile && (
+            <Link href="/collection/add" className="btn-primary">
+              <Plus className="h-4 w-4" />
+              Add Card
+            </Link>
+          )}
+        </div>
         {cards.length === 0 ? (
           <p className="text-sm text-muted">No cards to show yet.</p>
         ) : (

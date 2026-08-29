@@ -317,3 +317,48 @@ create policy "Users can delete their own wishlist entries"
   on public.wishlist for delete
   to authenticated
   using (auth.uid() = user_id);
+
+-- ============================================================================
+-- Storage — card photo uploads
+--
+-- Photos are uploaded to a `card-photos` bucket under a per-user folder
+-- (`<user id>/<filename>`), so ownership can be checked from the storage
+-- path alone without a separate metadata table.
+-- ============================================================================
+
+insert into storage.buckets (id, name, public)
+values ('card-photos', 'card-photos', true)
+on conflict (id) do nothing;
+
+create policy "Card photos are publicly viewable"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'card-photos');
+
+create policy "Users can upload card photos to their own folder"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'card-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Users can update their own card photos"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'card-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'card-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Users can delete their own card photos"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'card-photos'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );

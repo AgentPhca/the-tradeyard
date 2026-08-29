@@ -1,4 +1,5 @@
-import { Layers } from "lucide-react";
+import Link from "next/link";
+import { Layers, Plus } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { createClient } from "@/lib/supabase/server";
 import type { Card } from "@/lib/types/database";
@@ -28,6 +29,10 @@ export default async function CollectionPage() {
             {cards.length} {cards.length === 1 ? "card" : "cards"}
           </p>
         </div>
+        <Link href="/collection/add" className="btn-primary">
+          <Plus className="h-4 w-4" />
+          Add Card
+        </Link>
       </div>
 
       {cards.length === 0 ? (
