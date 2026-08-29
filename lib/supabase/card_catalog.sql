@@ -6,7 +6,7 @@
 -- cards instead of the user typing everything by hand.
 --
 -- Schema mirrors cards_checklist_import.csv 1:1. Run this file first, then
--- lib/supabase/card_catalog_import.sql to load the ~10,489 rows.
+-- the files in lib/supabase/card_catalog_import/ to load the ~10,489 rows.
 --
 -- IMPORTANT — data limitation: the source checklist does NOT include
 -- parallel names or print runs (every `parallel` and `print_run` value in
