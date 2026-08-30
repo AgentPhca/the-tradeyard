@@ -19,6 +19,7 @@ interface TradingCardProps {
   isSaved?: boolean;
   ownerUsername?: string;
   ownerAvatarUrl?: string | null;
+  ownerAllowsContact?: boolean;
 }
 
 export function TradingCard({
@@ -28,6 +29,7 @@ export function TradingCard({
   isSaved = false,
   ownerUsername,
   ownerAvatarUrl,
+  ownerAllowsContact = true,
 }: TradingCardProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -212,7 +214,7 @@ export function TradingCard({
           </Link>
         )}
 
-        {forTrade && !isOwner && (
+        {forTrade && !isOwner && ownerAllowsContact && (
           <button
             type="button"
             onClick={handleContact}

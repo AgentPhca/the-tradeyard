@@ -41,11 +41,14 @@ export default async function MarketplacePage({
   const cards: Card[] = data ?? [];
 
   const ownerIds = Array.from(new Set(cards.map((card) => card.owner_id)));
-  const ownerById = new Map<string, { username: string; avatar_url: string | null }>();
+  const ownerById = new Map<
+    string,
+    { username: string; avatar_url: string | null; allow_contact: boolean }
+  >();
   if (ownerIds.length > 0) {
     const { data: owners } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url")
+      .select("id, username, avatar_url, allow_contact")
       .in("id", ownerIds);
     for (const owner of owners ?? []) {
       ownerById.set(owner.id, owner);
@@ -68,11 +71,14 @@ export default async function MarketplacePage({
     .limit(24);
 
   const requesterIds = Array.from(new Set((wishlistRows ?? []).map((row) => row.user_id)));
-  const requesterById = new Map<string, { username: string; avatar_url: string | null }>();
+  const requesterById = new Map<
+    string,
+    { username: string; avatar_url: string | null; allow_contact: boolean }
+  >();
   if (requesterIds.length > 0) {
     const { data: requesters } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url")
+      .select("id, username, avatar_url, allow_contact")
       .in("id", requesterIds);
     for (const requester of requesters ?? []) {
       requesterById.set(requester.id, requester);
@@ -110,6 +116,7 @@ export default async function MarketplacePage({
                 isSaved={savedCardIds.has(card.id)}
                 ownerUsername={owner?.username}
                 ownerAvatarUrl={owner?.avatar_url}
+                ownerAllowsContact={owner?.allow_contact ?? true}
               />
             );
           })}
@@ -131,6 +138,7 @@ export default async function MarketplacePage({
                   isOwner={entry.user_id === user?.id}
                   ownerUsername={requester?.username}
                   ownerAvatarUrl={requester?.avatar_url}
+                  ownerAllowsContact={requester?.allow_contact ?? true}
                 />
               );
             })}

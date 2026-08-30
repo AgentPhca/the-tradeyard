@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Heart, LayoutDashboard, Layers, Mail, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { ProfileMenu } from "@/components/layout/ProfileMenu";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types/database";
 
@@ -16,11 +17,18 @@ const NAV_LINKS = [
 ];
 
 interface NavbarProps {
-  profile?: Pick<Profile, "username" | "avatar_url"> | null;
+  profile?: Pick<Profile, "username" | "avatar_url" | "role" | "allow_contact"> | null;
   initialUnreadCount?: number;
+  followerCount?: number;
+  followingCount?: number;
 }
 
-export function Navbar({ profile, initialUnreadCount = 0 }: NavbarProps) {
+export function Navbar({
+  profile,
+  initialUnreadCount = 0,
+  followerCount = 0,
+  followingCount = 0,
+}: NavbarProps) {
   const pathname = usePathname();
   const supabase = createClient();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
@@ -102,12 +110,20 @@ export function Navbar({ profile, initialUnreadCount = 0 }: NavbarProps) {
             )}
           </Link>
 
-          <Link
-            href={profile ? `/profile/${profile.username}` : "/login"}
-            className="flex items-center gap-2 rounded-full border border-transparent p-0.5 transition-colors hover:border-border"
-          >
-            <Avatar src={profile?.avatar_url} alt={profile?.username ?? "Account"} size={36} />
-          </Link>
+          {profile ? (
+            <ProfileMenu
+              profile={profile}
+              followerCount={followerCount}
+              followingCount={followingCount}
+            />
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-2 rounded-full border border-transparent p-0.5 transition-colors hover:border-border"
+            >
+              <Avatar alt="Account" size={36} />
+            </Link>
+          )}
         </div>
       </div>
 

@@ -16,6 +16,7 @@ interface WishlistRequestCardProps {
   isOwner?: boolean;
   ownerUsername?: string;
   ownerAvatarUrl?: string | null;
+  ownerAllowsContact?: boolean;
 }
 
 export function WishlistRequestCard({
@@ -23,6 +24,7 @@ export function WishlistRequestCard({
   isOwner = false,
   ownerUsername,
   ownerAvatarUrl,
+  ownerAllowsContact = true,
 }: WishlistRequestCardProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -104,15 +106,17 @@ export function WishlistRequestCard({
             <Avatar src={ownerAvatarUrl} alt={ownerUsername} size={24} />
             @{ownerUsername}
           </Link>
-          <button
-            type="button"
-            onClick={handleContact}
-            disabled={contacting}
-            className="btn-secondary disabled:opacity-60"
-          >
-            <MessageCircle className="h-4 w-4" />
-            {contacting ? "Opening chat..." : "Kontakt"}
-          </button>
+          {ownerAllowsContact && (
+            <button
+              type="button"
+              onClick={handleContact}
+              disabled={contacting}
+              className="btn-secondary disabled:opacity-60"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {contacting ? "Opening chat..." : "Kontakt"}
+            </button>
+          )}
         </div>
       )}
 

@@ -12,6 +12,7 @@ export type Profile = {
   twitch_url: string | null;
   whatnot_url: string | null;
   website_url: string | null;
+  allow_contact: boolean;
   created_at: string;
 };
 

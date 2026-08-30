@@ -32,6 +32,7 @@ create table public.profiles (
   twitch_url text,
   whatnot_url text,
   website_url text,
+  allow_contact boolean not null default true,
   created_at timestamptz not null default now()
 );
 

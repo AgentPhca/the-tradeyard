@@ -224,6 +224,7 @@ export default async function ProfilePage({
                   isOwner={entry.user_id === user?.id}
                   ownerUsername={profile.username}
                   ownerAvatarUrl={profile.avatar_url}
+                  ownerAllowsContact={profile.allow_contact}
                 />
               ))}
             </div>
@@ -233,7 +234,12 @@ export default async function ProfilePage({
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {cards.map((card) => (
-              <TradingCard key={card.id} card={card} isOwner={isOwnProfile} />
+              <TradingCard
+                key={card.id}
+                card={card}
+                isOwner={isOwnProfile}
+                ownerAllowsContact={profile.allow_contact}
+              />
             ))}
           </div>
         )}

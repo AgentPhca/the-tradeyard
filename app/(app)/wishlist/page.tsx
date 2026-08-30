@@ -37,7 +37,10 @@ export default async function WishlistPage({
 
   let savedCards: Card[] = [];
   let lookingFor: Wishlist[] = [];
-  const ownerById = new Map<string, { username: string; avatar_url: string | null }>();
+  const ownerById = new Map<
+    string,
+    { username: string; avatar_url: string | null; allow_contact: boolean }
+  >();
 
   if (activeTab === "saved") {
     const { data: savedRows } = await supabase
@@ -58,7 +61,7 @@ export default async function WishlistPage({
       if (ownerIds.length > 0) {
         const { data: owners } = await supabase
           .from("profiles")
-          .select("id, username, avatar_url")
+          .select("id, username, avatar_url, allow_contact")
           .in("id", ownerIds);
         for (const owner of owners ?? []) {
           ownerById.set(owner.id, owner);
@@ -121,6 +124,7 @@ export default async function WishlistPage({
                   isSaved
                   ownerUsername={owner?.username}
                   ownerAvatarUrl={owner?.avatar_url}
+                  ownerAllowsContact={owner?.allow_contact ?? true}
                 />
               );
             })}
