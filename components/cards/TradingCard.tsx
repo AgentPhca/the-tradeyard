@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImageOff, MessageCircle, Pencil, PenLine, Shirt, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
 import { titleCase } from "@/lib/utils/text";
@@ -83,9 +82,13 @@ export function TradingCard({ card, isOwner = false }: TradingCardProps) {
           </div>
         )}
         <div className="absolute right-2 top-2">
-          <Badge variant={forTrade ? "primary" : "default"}>
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-text ${
+              forTrade ? "bg-[#14532D]" : "bg-[#21262D]"
+            }`}
+          >
             {forTrade ? "For Trade" : "Personal Collection"}
-          </Badge>
+          </span>
         </div>
       </div>
 
@@ -107,17 +110,13 @@ export function TradingCard({ card, isOwner = false }: TradingCardProps) {
             </span>
           )}
         </div>
-        <p className="truncate text-sm text-muted">
-          {[card.team, card.set_name].filter(Boolean).join(" · ") || " "}
-        </p>
-        {insertSetLabel && <p className="truncate text-xs text-muted">{insertSetLabel}</p>}
+        {card.team && <p className="truncate text-sm text-muted">{card.team}</p>}
+        {card.set_name && <p className="text-sm text-text">{card.set_name}</p>}
+        {insertSetLabel && <p className="text-xs text-muted">{insertSetLabel}</p>}
         {(card.parallel || serial) && (
-          <p className="truncate text-xs text-muted">
+          <p className="text-xs text-muted">
             {[card.parallel, serial].filter(Boolean).join(" · ")}
           </p>
-        )}
-        {card.condition && (
-          <p className="text-xs text-muted">Condition: {card.condition}</p>
         )}
 
         {forTrade && (
