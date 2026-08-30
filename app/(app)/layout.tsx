@@ -12,6 +12,7 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
 
   let profile = null;
+  let unreadCount = 0;
   if (user) {
     const { data } = await supabase
       .from("profiles")
@@ -19,11 +20,14 @@ export default async function AppLayout({
       .eq("id", user.id)
       .single();
     profile = data;
+
+    const { data: count } = await supabase.rpc("unread_message_count");
+    unreadCount = count ?? 0;
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar profile={profile} />
+      <Navbar profile={profile} initialUnreadCount={unreadCount} />
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
     </div>
   );

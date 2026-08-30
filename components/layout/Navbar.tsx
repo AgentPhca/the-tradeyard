@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, LayoutDashboard, Layers, Store } from "lucide-react";
+import { Heart, LayoutDashboard, Layers, Mail, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types/database";
 
 const NAV_LINKS = [
@@ -15,10 +17,45 @@ const NAV_LINKS = [
 
 interface NavbarProps {
   profile?: Pick<Profile, "username" | "avatar_url"> | null;
+  initialUnreadCount?: number;
 }
 
-export function Navbar({ profile }: NavbarProps) {
+export function Navbar({ profile, initialUnreadCount = 0 }: NavbarProps) {
   const pathname = usePathname();
+  const supabase = createClient();
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount);
+  }, [initialUnreadCount]);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    // RLS already scopes postgres_changes delivery to messages in
+    // conversations this user participates in, so no client-side filter
+    // on conversation ids is needed here.
+    const channel = supabase
+      .channel("inbox-badge")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const senderId = (payload.new as { sender_id: string }).sender_id;
+          supabase.auth.getUser().then(({ data: { user } }) => {
+            if (user && senderId !== user.id) {
+              setUnreadCount((count) => count + 1);
+            }
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -47,12 +84,31 @@ export function Navbar({ profile }: NavbarProps) {
           })}
         </nav>
 
-        <Link
-          href={profile ? `/profile/${profile.username}` : "/login"}
-          className="flex items-center gap-2 rounded-full border border-transparent p-0.5 transition-colors hover:border-border"
-        >
-          <Avatar src={profile?.avatar_url} alt={profile?.username ?? "Account"} size={36} />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/messages"
+            title="Messages"
+            className={`relative rounded-md p-2 transition-colors ${
+              pathname?.startsWith("/messages")
+                ? "bg-card text-text"
+                : "text-muted hover:bg-surface hover:text-text"
+            }`}
+          >
+            <Mail className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
+
+          <Link
+            href={profile ? `/profile/${profile.username}` : "/login"}
+            className="flex items-center gap-2 rounded-full border border-transparent p-0.5 transition-colors hover:border-border"
+          >
+            <Avatar src={profile?.avatar_url} alt={profile?.username ?? "Account"} size={36} />
+          </Link>
+        </div>
       </div>
 
       <nav className="flex items-center gap-1 overflow-x-auto border-t border-border px-4 py-2 sm:hidden">

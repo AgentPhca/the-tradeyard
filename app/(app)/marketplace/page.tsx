@@ -40,6 +40,18 @@ export default async function MarketplacePage({
   const { data } = await query.order("created_at", { ascending: false });
   const cards: Card[] = data ?? [];
 
+  const ownerIds = Array.from(new Set(cards.map((card) => card.owner_id)));
+  const ownerById = new Map<string, { username: string; avatar_url: string | null }>();
+  if (ownerIds.length > 0) {
+    const { data: owners } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url")
+      .in("id", ownerIds);
+    for (const owner of owners ?? []) {
+      ownerById.set(owner.id, owner);
+    }
+  }
+
   let savedCardIds = new Set<string>();
   if (user) {
     const { data: savedRows } = await supabase
@@ -87,15 +99,20 @@ export default async function MarketplacePage({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {cards.map((card) => (
-            <TradingCard
-              key={card.id}
-              card={card}
-              isOwner={card.owner_id === user?.id}
-              showSaveButton={Boolean(user)}
-              isSaved={savedCardIds.has(card.id)}
-            />
-          ))}
+          {cards.map((card) => {
+            const owner = ownerById.get(card.owner_id);
+            return (
+              <TradingCard
+                key={card.id}
+                card={card}
+                isOwner={card.owner_id === user?.id}
+                showSaveButton={Boolean(user)}
+                isSaved={savedCardIds.has(card.id)}
+                ownerUsername={owner?.username}
+                ownerAvatarUrl={owner?.avatar_url}
+              />
+            );
+          })}
         </div>
       )}
 

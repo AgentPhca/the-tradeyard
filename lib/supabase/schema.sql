@@ -29,6 +29,9 @@ create table public.profiles (
   avatar_url text,
   role public.user_role not null default 'collector',
   bio text,
+  twitch_url text,
+  whatnot_url text,
+  website_url text,
   created_at timestamptz not null default now()
 );
 
@@ -135,6 +138,75 @@ create table public.messages (
 create index messages_conversation_id_idx on public.messages (conversation_id, created_at);
 
 -- ----------------------------------------------------------------------------
+-- conversation_reads
+-- Per-user "last read" marker for a conversation, used to compute unread
+-- counts (Inbox badge). Kept as its own table rather than two columns on
+-- `conversations` so the app never has to work out which participant slot
+-- (1 or 2) the current user occupies.
+-- ----------------------------------------------------------------------------
+create table public.conversation_reads (
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  last_read_at timestamptz not null default now(),
+  primary key (conversation_id, user_id)
+);
+
+-- ----------------------------------------------------------------------------
+-- Keep conversations.last_message_at current and mark a message as read by
+-- its own sender the moment it's sent, without extra round trips from the
+-- client. Runs as security definer so it can update conversation_reads
+-- regardless of the sender's own RLS grants (same reasoning as
+-- handle_new_user above).
+-- ----------------------------------------------------------------------------
+create function public.handle_new_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.conversations
+  set last_message_at = new.created_at
+  where id = new.conversation_id;
+
+  insert into public.conversation_reads (conversation_id, user_id, last_read_at)
+  values (new.conversation_id, new.sender_id, new.created_at)
+  on conflict (conversation_id, user_id)
+  do update set last_read_at = excluded.last_read_at;
+
+  return new;
+end;
+$$;
+
+create trigger on_message_created
+  after insert on public.messages
+  for each row execute function public.handle_new_message();
+
+-- ----------------------------------------------------------------------------
+-- Total unread message count for the calling user (Inbox navbar badge).
+-- Runs with the caller's own privileges — the existing SELECT policies on
+-- conversations/messages already scope every join to rows they participate
+-- in, so no elevated privileges are needed here.
+-- ----------------------------------------------------------------------------
+create function public.unread_message_count()
+returns integer
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(count(m.id), 0)::integer
+  from public.messages m
+  join public.conversations c on c.id = m.conversation_id
+  left join public.conversation_reads r
+    on r.conversation_id = m.conversation_id and r.user_id = auth.uid()
+  where (c.participant_1 = auth.uid() or c.participant_2 = auth.uid())
+    and m.sender_id <> auth.uid()
+    and m.created_at > coalesce(r.last_read_at, 'epoch'::timestamptz);
+$$;
+
+grant execute on function public.unread_message_count() to authenticated;
+
+-- ----------------------------------------------------------------------------
 -- trades
 -- A proposed or completed 1:1 card trade between two profiles.
 -- ----------------------------------------------------------------------------
@@ -153,6 +225,43 @@ create table public.trades (
 create index trades_initiator_id_idx on public.trades (initiator_id);
 create index trades_receiver_id_idx on public.trades (receiver_id);
 create index trades_status_idx on public.trades (status);
+
+-- ----------------------------------------------------------------------------
+-- ratings
+-- A 1-5 star rating one profile leaves another after a specific completed
+-- trade. One rating per (trade, rater) — enforced by both the unique
+-- constraint and the insert policy below.
+-- ----------------------------------------------------------------------------
+create table public.ratings (
+  id uuid primary key default gen_random_uuid(),
+  trade_id uuid not null references public.trades (id) on delete cascade,
+  rater_id uuid not null references public.profiles (id) on delete cascade,
+  ratee_id uuid not null references public.profiles (id) on delete cascade,
+  stars smallint not null check (stars between 1 and 5),
+  comment text,
+  created_at timestamptz not null default now(),
+  constraint ratings_unique_per_trade_rater unique (trade_id, rater_id),
+  constraint ratings_no_self_rating check (rater_id <> ratee_id)
+);
+
+create index ratings_ratee_id_idx on public.ratings (ratee_id);
+create index ratings_trade_id_idx on public.ratings (trade_id);
+
+-- ----------------------------------------------------------------------------
+-- followers
+-- follower_id follows followee_id. No status/approval step — following is
+-- immediate and public.
+-- ----------------------------------------------------------------------------
+create table public.followers (
+  follower_id uuid not null references public.profiles (id) on delete cascade,
+  followee_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, followee_id),
+  constraint followers_no_self_follow check (follower_id <> followee_id)
+);
+
+create index followers_follower_id_idx on public.followers (follower_id);
+create index followers_followee_id_idx on public.followers (followee_id);
 
 -- ----------------------------------------------------------------------------
 -- wishlist
@@ -201,6 +310,9 @@ alter table public.messages enable row level security;
 alter table public.trades enable row level security;
 alter table public.wishlist enable row level security;
 alter table public.saved_cards enable row level security;
+alter table public.conversation_reads enable row level security;
+alter table public.ratings enable row level security;
+alter table public.followers enable row level security;
 
 -- ----------------------------------------------------------------------------
 -- profiles policies
@@ -303,6 +415,34 @@ create policy "Participants can send messages in their conversations"
   );
 
 -- ----------------------------------------------------------------------------
+-- conversation_reads policies
+-- Strictly private read-position bookkeeping — only ever needed by the
+-- owning user, and only for a conversation they actually participate in.
+-- ----------------------------------------------------------------------------
+create policy "Users can view their own read markers"
+  on public.conversation_reads for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "Users can set their own read markers"
+  on public.conversation_reads for insert
+  to authenticated
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.conversations c
+      where c.id = conversation_reads.conversation_id
+        and (auth.uid() = c.participant_1 or auth.uid() = c.participant_2)
+    )
+  );
+
+create policy "Users can update their own read markers"
+  on public.conversation_reads for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ----------------------------------------------------------------------------
 -- trades policies
 -- Only the initiator or receiver can see a trade. Only the initiator can
 -- propose one (as themselves); either party can update its status (accept,
@@ -323,6 +463,55 @@ create policy "Participants can update their trades"
   to authenticated
   using (auth.uid() = initiator_id or auth.uid() = receiver_id)
   with check (auth.uid() = initiator_id or auth.uid() = receiver_id);
+
+-- ----------------------------------------------------------------------------
+-- ratings policies
+-- Ratings are public read (they're the point of the feature). A rating can
+-- only be created by one of the two parties on a trade that has actually
+-- reached 'completed', rating the other party — never yourself, never a
+-- trade you weren't part of. Immutable once given: no update/delete policy.
+-- ----------------------------------------------------------------------------
+create policy "Ratings are viewable by authenticated users"
+  on public.ratings for select
+  to authenticated
+  using (true);
+
+create policy "Users can rate a completed trade they were part of"
+  on public.ratings for insert
+  to authenticated
+  with check (
+    auth.uid() = rater_id
+    and exists (
+      select 1 from public.trades t
+      where t.id = ratings.trade_id
+        and t.status = 'completed'
+        and (
+          (t.initiator_id = ratings.rater_id and t.receiver_id = ratings.ratee_id)
+          or (t.receiver_id = ratings.rater_id and t.initiator_id = ratings.ratee_id)
+        )
+    )
+  );
+
+-- ----------------------------------------------------------------------------
+-- followers policies
+-- Follow relationships are public read (needed for follower/following
+-- counts on any profile); only the follower can create or remove their own
+-- follow.
+-- ----------------------------------------------------------------------------
+create policy "Follows are viewable by authenticated users"
+  on public.followers for select
+  to authenticated
+  using (true);
+
+create policy "Users can follow as themselves"
+  on public.followers for insert
+  to authenticated
+  with check (auth.uid() = follower_id);
+
+create policy "Users can unfollow as themselves"
+  on public.followers for delete
+  to authenticated
+  using (auth.uid() = follower_id);
 
 -- ----------------------------------------------------------------------------
 -- wishlist policies
@@ -414,3 +603,62 @@ create policy "Users can delete their own card photos"
     bucket_id = 'card-photos'
     and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- ============================================================================
+-- Storage — avatar uploads
+--
+-- Same per-user-folder pattern as card-photos, for profile avatars.
+-- ============================================================================
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+create policy "Avatars are publicly viewable"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'avatars');
+
+create policy "Users can upload avatars to their own folder"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Users can update their own avatars"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  )
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+create policy "Users can delete their own avatars"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+-- ============================================================================
+-- Realtime — live message delivery for the Inbox
+-- ============================================================================
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;

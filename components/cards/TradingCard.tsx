@@ -5,8 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, ImageOff, MessageCircle, Pencil, PenLine, Shirt, Trash2 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
+import { findOrCreateConversation } from "@/lib/supabase/conversations";
 import { titleCase } from "@/lib/utils/text";
 import type { Card as CardData } from "@/lib/types/database";
 
@@ -15,6 +17,8 @@ interface TradingCardProps {
   isOwner?: boolean;
   showSaveButton?: boolean;
   isSaved?: boolean;
+  ownerUsername?: string;
+  ownerAvatarUrl?: string | null;
 }
 
 export function TradingCard({
@@ -22,6 +26,8 @@ export function TradingCard({
   isOwner = false,
   showSaveButton = false,
   isSaved = false,
+  ownerUsername,
+  ownerAvatarUrl,
 }: TradingCardProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -30,6 +36,7 @@ export function TradingCard({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [saved, setSaved] = useState(isSaved);
   const [togglingSave, setTogglingSave] = useState(false);
+  const [contacting, setContacting] = useState(false);
 
   const forTrade = card.status === "for_trade";
   const serial =
@@ -84,6 +91,27 @@ export function TradingCard({
 
     setTogglingSave(false);
     router.refresh();
+  }
+
+  async function handleContact() {
+    setContacting(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.push("/login");
+      setContacting(false);
+      return;
+    }
+
+    try {
+      const conversationId = await findOrCreateConversation(supabase, user.id, card.owner_id);
+      router.push(`/messages?conversation=${conversationId}`);
+    } finally {
+      setContacting(false);
+    }
   }
 
   return (
@@ -174,13 +202,25 @@ export function TradingCard({
           </p>
         )}
 
-        {forTrade && (
+        {!isOwner && ownerUsername && (
+          <Link
+            href={`/profile/${ownerUsername}`}
+            className="mt-1 flex items-center gap-1.5 text-xs text-muted hover:text-text"
+          >
+            <Avatar src={ownerAvatarUrl} alt={ownerUsername} size={18} />
+            @{ownerUsername}
+          </Link>
+        )}
+
+        {forTrade && !isOwner && (
           <button
             type="button"
-            className="btn-primary mt-3 w-full"
+            onClick={handleContact}
+            disabled={contacting}
+            className="btn-primary mt-3 w-full disabled:opacity-60"
           >
             <MessageCircle className="h-4 w-4" />
-            Kontakt
+            {contacting ? "Opening chat..." : "Kontakt"}
           </button>
         )}
       </div>

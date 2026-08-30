@@ -9,6 +9,9 @@ export type Profile = {
   avatar_url: string | null;
   role: UserRole;
   bio: string | null;
+  twitch_url: string | null;
+  whatnot_url: string | null;
+  website_url: string | null;
   created_at: string;
 };
 
@@ -76,6 +79,28 @@ export type SavedCard = {
   user_id: string;
   card_id: string;
   created_at: string;
+};
+
+export type Follower = {
+  follower_id: string;
+  followee_id: string;
+  created_at: string;
+};
+
+export type Rating = {
+  id: string;
+  trade_id: string;
+  rater_id: string;
+  ratee_id: string;
+  stars: number;
+  comment: string | null;
+  created_at: string;
+};
+
+export type ConversationRead = {
+  conversation_id: string;
+  user_id: string;
+  last_read_at: string;
 };
 
 export type CardCatalogEntry = {
@@ -258,6 +283,77 @@ export interface Database {
           },
         ];
       };
+      followers: {
+        Row: Follower;
+        Insert: Partial<Follower> & Pick<Follower, "follower_id" | "followee_id">;
+        Update: Partial<Follower>;
+        Relationships: [
+          {
+            foreignKeyName: "followers_follower_id_fkey";
+            columns: ["follower_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "followers_followee_id_fkey";
+            columns: ["followee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      ratings: {
+        Row: Rating;
+        Insert: Partial<Rating> & Pick<Rating, "trade_id" | "rater_id" | "ratee_id" | "stars">;
+        Update: Partial<Rating>;
+        Relationships: [
+          {
+            foreignKeyName: "ratings_trade_id_fkey";
+            columns: ["trade_id"];
+            isOneToOne: false;
+            referencedRelation: "trades";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ratings_rater_id_fkey";
+            columns: ["rater_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ratings_ratee_id_fkey";
+            columns: ["ratee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversation_reads: {
+        Row: ConversationRead;
+        Insert: Partial<ConversationRead> &
+          Pick<ConversationRead, "conversation_id" | "user_id">;
+        Update: Partial<ConversationRead>;
+        Relationships: [
+          {
+            foreignKeyName: "conversation_reads_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_reads_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       card_catalog_insert_sets: {
@@ -265,6 +361,11 @@ export interface Database {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      unread_message_count: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
+    };
   };
 }

@@ -7,6 +7,7 @@ import { MessageCircle, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
+import { findOrCreateConversation } from "@/lib/supabase/conversations";
 import { titleCase } from "@/lib/utils/text";
 import type { Wishlist } from "@/lib/types/database";
 
@@ -28,6 +29,7 @@ export function WishlistRequestCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [contacting, setContacting] = useState(false);
 
   const details = [
     entry.team,
@@ -51,6 +53,27 @@ export function WishlistRequestCard({
     setDeleting(false);
     setConfirmOpen(false);
     router.refresh();
+  }
+
+  async function handleContact() {
+    setContacting(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.push("/login");
+      setContacting(false);
+      return;
+    }
+
+    try {
+      const conversationId = await findOrCreateConversation(supabase, user.id, entry.user_id);
+      router.push(`/messages?conversation=${conversationId}`);
+    } finally {
+      setContacting(false);
+    }
   }
 
   return (
@@ -81,9 +104,14 @@ export function WishlistRequestCard({
             <Avatar src={ownerAvatarUrl} alt={ownerUsername} size={24} />
             @{ownerUsername}
           </Link>
-          <button type="button" className="btn-secondary">
+          <button
+            type="button"
+            onClick={handleContact}
+            disabled={contacting}
+            className="btn-secondary disabled:opacity-60"
+          >
             <MessageCircle className="h-4 w-4" />
-            Kontakt
+            {contacting ? "Opening chat..." : "Kontakt"}
           </button>
         </div>
       )}
