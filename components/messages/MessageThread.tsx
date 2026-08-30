@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Send } from "lucide-react";
+import { ChevronLeft, Send } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { createClient } from "@/lib/supabase/client";
 import type { Message } from "@/lib/types/database";
@@ -96,13 +96,22 @@ export function MessageThread({
 
   return (
     <div className="flex h-full flex-col">
-      <Link
-        href={`/profile/${otherParticipant.username}`}
-        className="flex items-center gap-3 border-b border-border p-4 hover:bg-surface"
-      >
-        <Avatar src={otherParticipant.avatar_url} alt={otherParticipant.username} size={36} />
-        <span className="font-medium text-text">@{otherParticipant.username}</span>
-      </Link>
+      <div className="flex items-center gap-2 border-b border-border p-3 sm:p-4">
+        <Link
+          href="/messages"
+          title="Back to conversations"
+          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface hover:text-text sm:hidden"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </Link>
+        <Link
+          href={`/profile/${otherParticipant.username}`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 transition-colors hover:bg-surface"
+        >
+          <Avatar src={otherParticipant.avatar_url} alt={otherParticipant.username} size={36} />
+          <span className="truncate font-medium text-text">@{otherParticipant.username}</span>
+        </Link>
+      </div>
 
       <div className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 ? (

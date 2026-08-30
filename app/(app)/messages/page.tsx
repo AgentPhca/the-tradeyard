@@ -90,8 +90,12 @@ export default async function MessagesPage({
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-lg border border-border bg-card">
-      <div className="w-full max-w-xs shrink-0 overflow-y-auto border-r border-border">
+    <div className="flex h-[calc(100vh-10.5rem)] overflow-hidden rounded-lg border border-border bg-card sm:h-[calc(100vh-8rem)]">
+      <div
+        className={`${
+          selectedId ? "hidden sm:block" : "block"
+        } w-full overflow-y-auto sm:w-auto sm:max-w-xs sm:shrink-0 sm:border-r sm:border-border`}
+      >
         {conversationList.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
             <Inbox className="h-6 w-6 text-muted" />
@@ -132,7 +136,7 @@ export default async function MessagesPage({
         )}
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className={`${selectedId ? "block" : "hidden sm:block"} flex-1 overflow-hidden`}>
         {selectedId && selectedOtherParticipant ? (
           <MessageThread
             key={selectedId}

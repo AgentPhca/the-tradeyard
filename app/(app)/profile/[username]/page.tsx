@@ -177,7 +177,7 @@ export default async function ProfilePage({
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           {isOwnProfile ? (
             <>
               <Link href="/collection/add" className="btn-primary">
@@ -196,12 +196,12 @@ export default async function ProfilePage({
       </div>
 
       <div className="mt-8">
-        <div className="mb-6 flex gap-1 border-b border-border">
+        <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
           {TABS.map((t) => (
             <Link
               key={t.key}
               href={`/profile/${profile.username}?tab=${t.key}`}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === t.key
                   ? "border-b-2 border-primary text-text"
                   : "text-muted hover:text-text"
