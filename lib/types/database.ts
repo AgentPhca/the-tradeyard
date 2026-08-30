@@ -65,8 +65,16 @@ export type Wishlist = {
   player_name: string;
   team: string | null;
   set_name: string | null;
+  insert_set: string | null;
   parallel: string | null;
   notes: string | null;
+  created_at: string;
+};
+
+export type SavedCard = {
+  id: string;
+  user_id: string;
+  card_id: string;
   created_at: string;
 };
 
@@ -228,6 +236,27 @@ export interface Database {
           Pick<CardCatalogEntry, "set_name" | "player_name">;
         Update: Partial<CardCatalogEntry>;
         Relationships: [];
+      };
+      saved_cards: {
+        Row: SavedCard;
+        Insert: Partial<SavedCard> & Pick<SavedCard, "user_id" | "card_id">;
+        Update: Partial<SavedCard>;
+        Relationships: [
+          {
+            foreignKeyName: "saved_cards_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "saved_cards_card_id_fkey";
+            columns: ["card_id"];
+            isOneToOne: false;
+            referencedRelation: "cards";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: {

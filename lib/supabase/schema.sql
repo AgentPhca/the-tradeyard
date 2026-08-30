@@ -156,6 +156,8 @@ create index trades_status_idx on public.trades (status);
 
 -- ----------------------------------------------------------------------------
 -- wishlist
+-- "Looking For" requests — a card a user wants but doesn't own yet. Browsable
+-- by any authenticated user on the Marketplace so owners can offer a trade.
 -- ----------------------------------------------------------------------------
 create table public.wishlist (
   id uuid primary key default gen_random_uuid(),
@@ -163,12 +165,30 @@ create table public.wishlist (
   player_name text not null,
   team text,
   set_name text,
+  insert_set text,
   parallel text,
   notes text,
   created_at timestamptz not null default now()
 );
 
 create index wishlist_user_id_idx on public.wishlist (user_id);
+
+-- ----------------------------------------------------------------------------
+-- saved_cards
+-- A user "hearting" a Marketplace card to keep track of it (Wishlist ->
+-- Saved Cards tab). Distinct from `wishlist`, which is for cards the user
+-- doesn't own yet — this references an actual existing `cards` row.
+-- ----------------------------------------------------------------------------
+create table public.saved_cards (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  card_id uuid not null references public.cards (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint saved_cards_unique_pair unique (user_id, card_id)
+);
+
+create index saved_cards_user_id_idx on public.saved_cards (user_id);
+create index saved_cards_card_id_idx on public.saved_cards (card_id);
 
 -- ============================================================================
 -- Row Level Security
@@ -180,6 +200,7 @@ alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.trades enable row level security;
 alter table public.wishlist enable row level security;
+alter table public.saved_cards enable row level security;
 
 -- ----------------------------------------------------------------------------
 -- profiles policies
@@ -326,6 +347,26 @@ create policy "Users can update their own wishlist entries"
 
 create policy "Users can delete their own wishlist entries"
   on public.wishlist for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- ----------------------------------------------------------------------------
+-- saved_cards policies
+-- Strictly private — only the saver can see, create, or remove their own
+-- saved-card entries.
+-- ----------------------------------------------------------------------------
+create policy "Users can view their own saved cards"
+  on public.saved_cards for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "Users can save cards"
+  on public.saved_cards for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "Users can remove their own saved cards"
+  on public.saved_cards for delete
   to authenticated
   using (auth.uid() = user_id);
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Layers, Store } from "lucide-react";
+import { Heart, LayoutDashboard, Layers, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import type { Profile } from "@/lib/types/database";
 
@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/collection", label: "Collection", icon: Layers },
   { href: "/marketplace", label: "Marketplace", icon: Store },
+  { href: "/wishlist", label: "Wishlist", icon: Heart },
 ];
 
 interface NavbarProps {

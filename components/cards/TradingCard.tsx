@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ImageOff, MessageCircle, Pencil, PenLine, Shirt, Trash2 } from "lucide-react";
+import { Heart, ImageOff, MessageCircle, Pencil, PenLine, Shirt, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
 import { titleCase } from "@/lib/utils/text";
@@ -13,14 +13,23 @@ import type { Card as CardData } from "@/lib/types/database";
 interface TradingCardProps {
   card: CardData;
   isOwner?: boolean;
+  showSaveButton?: boolean;
+  isSaved?: boolean;
 }
 
-export function TradingCard({ card, isOwner = false }: TradingCardProps) {
+export function TradingCard({
+  card,
+  isOwner = false,
+  showSaveButton = false,
+  isSaved = false,
+}: TradingCardProps) {
   const router = useRouter();
   const supabase = createClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(isSaved);
+  const [togglingSave, setTogglingSave] = useState(false);
 
   const forTrade = card.status === "for_trade";
   const serial =
@@ -46,6 +55,37 @@ export function TradingCard({ card, isOwner = false }: TradingCardProps) {
     router.refresh();
   }
 
+  async function handleToggleSave() {
+    setTogglingSave(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.push("/login");
+      setTogglingSave(false);
+      return;
+    }
+
+    if (saved) {
+      const { error } = await supabase
+        .from("saved_cards")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("card_id", card.id);
+      if (!error) setSaved(false);
+    } else {
+      const { error } = await supabase
+        .from("saved_cards")
+        .insert({ user_id: user.id, card_id: card.id });
+      if (!error) setSaved(true);
+    }
+
+    setTogglingSave(false);
+    router.refresh();
+  }
+
   return (
     <div className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
       <div className="relative aspect-[5/7] w-full bg-surface">
@@ -62,23 +102,38 @@ export function TradingCard({ card, isOwner = false }: TradingCardProps) {
             <ImageOff className="h-8 w-8 text-muted" />
           </div>
         )}
-        {isOwner && (
+        {(isOwner || showSaveButton) && (
           <div className="absolute left-2 top-2 flex gap-1">
-            <Link
-              href={`/collection/${card.id}/edit`}
-              title="Edit card"
-              className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Link>
-            <button
-              type="button"
-              title="Delete card"
-              onClick={() => setConfirmOpen(true)}
-              className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-red-400"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {isOwner && (
+              <>
+                <Link
+                  href={`/collection/${card.id}/edit`}
+                  title="Edit card"
+                  className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Link>
+                <button
+                  type="button"
+                  title="Delete card"
+                  onClick={() => setConfirmOpen(true)}
+                  className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+            {showSaveButton && (
+              <button
+                type="button"
+                title={saved ? "Remove from saved cards" : "Save card"}
+                onClick={handleToggleSave}
+                disabled={togglingSave}
+                className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary disabled:opacity-60"
+              >
+                <Heart className={`h-3.5 w-3.5 ${saved ? "fill-primary text-primary" : ""}`} />
+              </button>
+            )}
           </div>
         )}
         <div className="absolute right-2 top-2">
