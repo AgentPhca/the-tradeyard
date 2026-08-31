@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LogOut, Pencil, User, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { Switch } from "@/components/ui/Switch";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/lib/types/database";
 
@@ -145,22 +146,7 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
           <div className="border-t border-border px-3 py-3">
             <label className="flex items-center justify-between gap-2 text-sm text-text">
               <span>Allow others to contact me</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={allowContact}
-                onClick={handleToggleContact}
-                disabled={updatingContact}
-                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-60 ${
-                  allowContact ? "bg-primary" : "bg-border"
-                }`}
-              >
-                <span
-                  className={`absolute top-1 h-3 w-3 rounded-full bg-text transition-transform ${
-                    allowContact ? "translate-x-5" : "translate-x-1"
-                  }`}
-                />
-              </button>
+              <Switch checked={allowContact} onChange={handleToggleContact} disabled={updatingContact} />
             </label>
             {contactError && <p className="mt-2 text-xs text-red-400">{contactError}</p>}
           </div>

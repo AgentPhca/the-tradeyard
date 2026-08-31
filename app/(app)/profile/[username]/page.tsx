@@ -7,7 +7,7 @@ import { TradingCard } from "@/components/cards/TradingCard";
 import { FollowButton } from "@/components/profile/FollowButton";
 import { RatingWidget } from "@/components/profile/RatingWidget";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
-import { QuickVisibilityToggle } from "@/components/profile/QuickVisibilityToggle";
+import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/server";
 import type { Card, Wishlist } from "@/lib/types/database";
 
@@ -250,13 +250,20 @@ export default async function ProfilePage({
             This user doesn&rsquo;t show their Personal Collection publicly.
           </p>
         ) : cards.length === 0 ? (
-          <p className="text-sm text-muted">No cards to show yet.</p>
+          <>
+            {activeTab === "collection" && isOwnProfile && (
+              <div className="mb-4">
+                <VisibilityToggle profileId={profile.id} initialValue={profile.show_personal_collection} />
+              </div>
+            )}
+            <p className="text-sm text-muted">No cards to show yet.</p>
+          </>
         ) : (
           <>
-            {activeTab === "collection" && isOwnProfile && !profile.show_personal_collection && (
-              <p className="mb-4 text-xs text-muted">
-                Only visible to you. <QuickVisibilityToggle profileId={profile.id} />
-              </p>
+            {activeTab === "collection" && isOwnProfile && (
+              <div className="mb-4">
+                <VisibilityToggle profileId={profile.id} initialValue={profile.show_personal_collection} />
+              </div>
             )}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {cards.map((card) => (

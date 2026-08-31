@@ -6,6 +6,7 @@ import Image from "next/image";
 import { Camera } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, UserRole } from "@/lib/types/database";
 
@@ -30,9 +31,6 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [twitchUrl, setTwitchUrl] = useState(profile.twitch_url ?? "");
   const [whatnotUrl, setWhatnotUrl] = useState(profile.whatnot_url ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(profile.website_url ?? "");
-  const [showPersonalCollection, setShowPersonalCollection] = useState(
-    profile.show_personal_collection
-  );
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatar_url);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +84,6 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         twitch_url: twitchUrl || null,
         whatnot_url: whatnotUrl || null,
         website_url: websiteUrl || null,
-        show_personal_collection: showPersonalCollection,
         avatar_url: avatarUrl,
       })
       .eq("id", profile.id);
@@ -228,24 +225,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         </div>
 
         <div className="rounded-md border border-border bg-surface p-4">
-          <label className="flex items-center justify-between gap-2 text-sm font-medium text-text">
-            <span>Show Personal Collection publicly</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showPersonalCollection}
-              onClick={() => setShowPersonalCollection((v) => !v)}
-              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                showPersonalCollection ? "bg-primary" : "bg-border"
-              }`}
-            >
-              <span
-                className={`absolute top-1 h-3 w-3 rounded-full bg-text transition-transform ${
-                  showPersonalCollection ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </label>
+          <VisibilityToggle profileId={profile.id} initialValue={profile.show_personal_collection} />
           <p className="mt-2 text-xs text-muted">
             When on, other users can see the cards in your &ldquo;Personal Collection&rdquo; —
             but they still can&rsquo;t contact you about them. Kontakt is only ever available
