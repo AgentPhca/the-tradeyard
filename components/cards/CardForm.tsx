@@ -10,24 +10,15 @@ import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { CARD_SETS, CONDITIONS } from "@/lib/data/cardCatalog";
-import { titleCase } from "@/lib/utils/text";
+import { useParallelsForSet } from "@/lib/hooks/useParallelsForSet";
+import { parallelLabel, titleCase } from "@/lib/utils/text";
 import type {
   Card,
   CardCatalogEntry,
   CardCatalogInsertSet,
   CardStatus,
-  Parallel,
   UserRole,
 } from "@/lib/types/database";
-
-const FINEST_SET_NAME = "2025 Topps Finest Football";
-const SIGNATURE_CLASS_SET_NAME = "2025 Topps Signature Class Football";
-
-function parallelLabel(p: Pick<Parallel, "parallel_name" | "print_run" | "sku_exclusivity">) {
-  const printRunSuffix = p.print_run != null ? ` /${p.print_run}` : "";
-  const exclusivitySuffix = p.sku_exclusivity ? ` (${p.sku_exclusivity})` : "";
-  return `${p.parallel_name}${printRunSuffix}${exclusivitySuffix}`;
-}
 
 type CatalogMatch = Pick<
   CardCatalogEntry,
@@ -74,7 +65,6 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [catalogMatches, setCatalogMatches] = useState<CatalogMatch[]>([]);
   const [showMatches, setShowMatches] = useState(false);
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
-  const [parallelOptions, setParallelOptions] = useState<Parallel[]>([]);
   const suppressLookup = useRef(Boolean(card));
   const suppressSetReset = useRef(Boolean(card));
 
@@ -140,35 +130,6 @@ export function CardForm({ mode, card }: CardFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setName]);
 
-  // Populate the Parallel dropdown from the real, researched parallel data,
-  // scoped to whichever Set is currently chosen. For Finest and Signature
-  // Class this still fetches every row for the set (all tiers / base types
-  // stacked together) — see filteredParallels below for the tier/base-type
-  // split, since the same parallel_name means a different print run
-  // depending on which one applies.
-  useEffect(() => {
-    if (!setName) {
-      setParallelOptions([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    (async () => {
-      const { data } = await supabase
-        .from("parallels")
-        .select("id, set_name, parallel_name, print_run, sku_exclusivity, tier, base_type, sort_order")
-        .eq("set_name", setName)
-        .order("sort_order");
-      if (!cancelled) setParallelOptions(data ?? []);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setName]);
-
   // Changing the Set manually (not via a catalog pick, and not on initial
   // load of an existing card) means the previous Insert Set / Auto / Relic
   // / Parallel / Tier / Base Type selections no longer apply.
@@ -188,14 +149,11 @@ export function CardForm({ mode, card }: CardFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setName]);
 
-  const isFinestSet = setName === FINEST_SET_NAME;
-  const isSignatureClassSet = setName === SIGNATURE_CLASS_SET_NAME;
-
-  const filteredParallels = isFinestSet
-    ? parallelOptions.filter((p) => p.tier === tier)
-    : isSignatureClassSet
-      ? parallelOptions.filter((p) => p.base_type === baseType)
-      : parallelOptions;
+  const { parallels: filteredParallels, isFinestSet, isSignatureClassSet } = useParallelsForSet(
+    setName,
+    tier,
+    baseType
+  );
 
   const parallelDisabled =
     !setName || (isFinestSet && !tier) || (isSignatureClassSet && !baseType);

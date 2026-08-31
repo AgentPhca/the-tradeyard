@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
-import { CARD_SETS, PARALLELS, AUTO_PARALLELS } from "@/lib/data/cardCatalog";
+import { CARD_SETS } from "@/lib/data/cardCatalog";
+import { useParallelsForSet } from "@/lib/hooks/useParallelsForSet";
 import { titleCase } from "@/lib/utils/text";
 import type { CardCatalogInsertSet } from "@/lib/types/database";
 
@@ -25,6 +26,21 @@ export function MarketplaceFilters() {
 
   const [playerName, setPlayerName] = useState(searchParams.get("player") ?? "");
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
+
+  // Marketplace filtering only needs one row per parallel_name — unlike the
+  // Add Card / Wishlist forms, it doesn't need the Finest tier / Signature
+  // Class base_type split (a print run doesn't matter for "show me cards
+  // with this parallel"), so this dedupes rawParallels instead of using the
+  // hook's tier/base-type-filtered `parallels`.
+  const { rawParallels } = useParallelsForSet(setName);
+  const parallelOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return rawParallels.filter((p) => {
+      if (seen.has(p.parallel_name)) return false;
+      seen.add(p.parallel_name);
+      return true;
+    });
+  }, [rawParallels]);
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -94,7 +110,7 @@ export function MarketplaceFilters() {
 
         <Select
           value={setName}
-          onChange={(e) => updateParams({ set: e.target.value, insertSet: "" })}
+          onChange={(e) => updateParams({ set: e.target.value, insertSet: "", parallel: "" })}
         >
           <option value="">All sets</option>
           {CARD_SETS.map((s) => (
@@ -117,22 +133,18 @@ export function MarketplaceFilters() {
           ))}
         </Select>
 
-        <Select value={parallel} onChange={(e) => updateParams({ parallel: e.target.value })}>
-          <option value="">All parallels</option>
-          <optgroup label="Parallels">
-            {PARALLELS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Autograph parallels">
-            {AUTO_PARALLELS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </optgroup>
+        <Select
+          value={parallel}
+          onChange={(e) => updateParams({ parallel: e.target.value })}
+          disabled={!setName}
+        >
+          <option value="">{setName ? "All parallels" : "Select a set first"}</option>
+          {parallelOptions.map((p) => (
+            <option key={p.id} value={p.parallel_name}>
+              {p.parallel_name}
+              {p.sku_exclusivity ? ` (${p.sku_exclusivity})` : ""}
+            </option>
+          ))}
         </Select>
 
         <Select value={status} onChange={(e) => updateParams({ status: e.target.value })}>

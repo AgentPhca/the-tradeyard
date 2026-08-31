@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
-import { CARD_SETS, PARALLELS, AUTO_PARALLELS } from "@/lib/data/cardCatalog";
-import { titleCase } from "@/lib/utils/text";
+import { CARD_SETS } from "@/lib/data/cardCatalog";
+import { useParallelsForSet } from "@/lib/hooks/useParallelsForSet";
+import { parallelLabel, titleCase } from "@/lib/utils/text";
 import type { CardCatalogInsertSet } from "@/lib/types/database";
 
 export function WishlistForm() {
@@ -20,10 +21,29 @@ export function WishlistForm() {
   const [setName, setSetName] = useState("");
   const [insertSet, setInsertSet] = useState("");
   const [parallel, setParallel] = useState("");
+  const [tier, setTier] = useState("");
+  const [baseType, setBaseType] = useState("");
   const [notes, setNotes] = useState("");
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const { parallels: filteredParallels, isFinestSet, isSignatureClassSet } = useParallelsForSet(
+    setName,
+    tier,
+    baseType
+  );
+
+  const parallelDisabled =
+    !setName || (isFinestSet && !tier) || (isSignatureClassSet && !baseType);
+
+  const parallelPlaceholder = !setName
+    ? "Select a set first"
+    : isFinestSet && !tier
+      ? "Select a tier first"
+      : isSignatureClassSet && !baseType
+        ? "Select a base type first"
+        : "Any parallel";
 
   useEffect(() => {
     if (!setName) {
@@ -46,6 +66,15 @@ export function WishlistForm() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setName]);
+
+  // Changing the Set means the previous Parallel / Tier / Base Type
+  // selections no longer apply, same as the Add Card form.
+  useEffect(() => {
+    setParallel("");
+    setTier("");
+    setBaseType("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setName]);
 
@@ -138,48 +167,69 @@ export function WishlistForm() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="wlInsertSet" className="mb-1.5 block text-sm font-medium text-text">
-            Insert Set
-          </label>
-          <Select
-            id="wlInsertSet"
-            value={insertSet}
-            onChange={(e) => setInsertSet(e.target.value)}
-            disabled={!setName}
-          >
-            <option value="">{setName ? "Any insert set" : "Select a set first"}</option>
-            {insertSetOptions.map((option) => (
-              <option key={option.insert_set} value={option.insert_set}>
-                {titleCase(option.insert_set)}
-              </option>
-            ))}
-          </Select>
-        </div>
+      <div>
+        <label htmlFor="wlInsertSet" className="mb-1.5 block text-sm font-medium text-text">
+          Insert Set
+        </label>
+        <Select
+          id="wlInsertSet"
+          value={insertSet}
+          onChange={(e) => setInsertSet(e.target.value)}
+          disabled={!setName}
+        >
+          <option value="">{setName ? "Any insert set" : "Select a set first"}</option>
+          {insertSetOptions.map((option) => (
+            <option key={option.insert_set} value={option.insert_set}>
+              {titleCase(option.insert_set)}
+            </option>
+          ))}
+        </Select>
+      </div>
 
+      {isFinestSet && (
         <div>
-          <label htmlFor="wlParallel" className="mb-1.5 block text-sm font-medium text-text">
-            Parallel
+          <label htmlFor="wlTier" className="mb-1.5 block text-sm font-medium text-text">
+            Tier
           </label>
-          <Select id="wlParallel" value={parallel} onChange={(e) => setParallel(e.target.value)}>
-            <option value="">Any parallel</option>
-            <optgroup label="Parallels">
-              {PARALLELS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Autograph parallels">
-              {AUTO_PARALLELS.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </optgroup>
+          <Select id="wlTier" value={tier} onChange={(e) => setTier(e.target.value)}>
+            <option value="">Select a tier</option>
+            <option value="Common">Common</option>
+            <option value="Uncommon">Uncommon</option>
+            <option value="Rare">Rare</option>
           </Select>
         </div>
+      )}
+
+      {isSignatureClassSet && (
+        <div>
+          <label htmlFor="wlBaseType" className="mb-1.5 block text-sm font-medium text-text">
+            Base Type
+          </label>
+          <Select id="wlBaseType" value={baseType} onChange={(e) => setBaseType(e.target.value)}>
+            <option value="">Select a base type</option>
+            <option value="Chrome">Chrome</option>
+            <option value="Paper">Paper</option>
+          </Select>
+        </div>
+      )}
+
+      <div>
+        <label htmlFor="wlParallel" className="mb-1.5 block text-sm font-medium text-text">
+          Parallel
+        </label>
+        <Select
+          id="wlParallel"
+          value={parallel}
+          onChange={(e) => setParallel(e.target.value)}
+          disabled={parallelDisabled}
+        >
+          <option value="">{parallelPlaceholder}</option>
+          {filteredParallels.map((p) => (
+            <option key={p.id} value={p.parallel_name}>
+              {parallelLabel(p)}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <div>
