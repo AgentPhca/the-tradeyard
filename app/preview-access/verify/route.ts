@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const url = new URL("/preview-access", origin);
     url.searchParams.set("error", "not-configured");
     if (next !== "/") url.searchParams.set("next", next);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, 303);
   }
 
   const isCorrect =
@@ -38,11 +38,18 @@ export async function POST(request: Request) {
     const url = new URL("/preview-access", origin);
     url.searchParams.set("error", "invalid");
     if (next !== "/") url.searchParams.set("next", next);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(url, 303);
   }
 
   const token = await createPreviewAccessToken(previewPassword);
-  const response = NextResponse.redirect(new URL(next, origin));
+  // 303, not the default 307: this redirect follows a POST, and per HTTP
+  // semantics a 307/308 tells the browser to repeat the request with the
+  // SAME method at the new Location — that turned this into the browser
+  // re-issuing a POST to `next` (POST / for the common case), which 405s
+  // since `/` has no POST handler. 303 See Other is the one status that
+  // means "the response to this POST is over here, GET it" — the standard
+  // Post/Redirect/Get pattern this route needs.
+  const response = NextResponse.redirect(new URL(next, origin), 303);
   response.cookies.set(PREVIEW_ACCESS_COOKIE, token, {
     httpOnly: true,
     secure: true,
