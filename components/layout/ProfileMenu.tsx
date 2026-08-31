@@ -26,6 +26,7 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
   const [open, setOpen] = useState(false);
   const [allowContact, setAllowContact] = useState(profile.allow_contact ?? true);
   const [updatingContact, setUpdatingContact] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Keep the toggle in sync with the server-provided value. profile is
@@ -49,27 +50,35 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
   async function handleToggleContact() {
     const next = !allowContact;
     setUpdatingContact(true);
-    setAllowContact(next);
+    setContactError(null);
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
-      setAllowContact(!next);
+      setUpdatingContact(false);
+      router.push("/login");
+      return;
+    }
+
+    // Trust only what the server actually persisted rather than assuming
+    // the write succeeded — an optimistic update here could otherwise show
+    // a value the database never stored.
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ allow_contact: next })
+      .eq("id", user.id)
+      .select("allow_contact")
+      .single();
+
+    if (error || !data) {
+      setContactError(error?.message ?? "Failed to update.");
       setUpdatingContact(false);
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ allow_contact: next })
-      .eq("id", user.id);
-
-    if (error) {
-      setAllowContact(!next);
-    }
-
+    setAllowContact(data.allow_contact);
     setUpdatingContact(false);
     router.refresh();
   }
@@ -147,12 +156,13 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-text transition-transform ${
-                    allowContact ? "translate-x-4" : "translate-x-0.5"
+                  className={`absolute top-1 h-3 w-3 rounded-full bg-text transition-transform ${
+                    allowContact ? "translate-x-5" : "translate-x-1"
                   }`}
                 />
               </button>
             </label>
+            {contactError && <p className="mt-2 text-xs text-red-400">{contactError}</p>}
           </div>
 
           <div className="border-t border-border py-1">
