@@ -16,12 +16,6 @@ export default function DatenschutzPage() {
           <br />
           Phil Cambefort
           <br />
-          Aachenerstraße 707
-          <br />
-          50259 Frechen
-          <br />
-          Deutschland
-          <br />
           E-Mail: theTradeyard@phca.tech
         </p>
       </section>

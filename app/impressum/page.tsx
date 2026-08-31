@@ -10,15 +10,7 @@ export default function ImpressumPage() {
     <LegalLayout title="Impressum">
       <section>
         <h2 className="mb-2 font-semibold text-text">Angaben gemäß § 5 TMG</h2>
-        <p>
-          Phil Cambefort
-          <br />
-          Aachenerstraße 707
-          <br />
-          50259 Frechen
-          <br />
-          Deutschland
-        </p>
+        <p>Phil Cambefort</p>
       </section>
 
       <section>
@@ -30,7 +22,7 @@ export default function ImpressumPage() {
         <h2 className="mb-2 font-semibold text-text">
           Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV
         </h2>
-        <p>Phil Cambefort (Anschrift wie oben)</p>
+        <p>Phil Cambefort (Kontakt siehe oben)</p>
       </section>
 
       <section>

@@ -15,7 +15,7 @@ export default function AgbPage() {
           nicht-kommerziellen Hobbyprojekt für Sammler von NFL-Trading-Cards, betrieben von:
           <br />
           <br />
-          Phil Cambefort, Aachenerstraße 707, 50259 Frechen (Kontakt: theTradeyard@phca.tech)
+          Phil Cambefort (Kontakt: theTradeyard@phca.tech)
           <br />
           <br />
           The Tradeyard betreibt kein Gewerbe. Über die Plattform werden weder Waren noch
