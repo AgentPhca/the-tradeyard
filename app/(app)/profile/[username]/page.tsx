@@ -7,6 +7,7 @@ import { TradingCard } from "@/components/cards/TradingCard";
 import { FollowButton } from "@/components/profile/FollowButton";
 import { RatingWidget } from "@/components/profile/RatingWidget";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
+import { QuickVisibilityToggle } from "@/components/profile/QuickVisibilityToggle";
 import { createClient } from "@/lib/supabase/server";
 import type { Card, Wishlist } from "@/lib/types/database";
 
@@ -253,7 +254,9 @@ export default async function ProfilePage({
         ) : (
           <>
             {activeTab === "collection" && isOwnProfile && !profile.show_personal_collection && (
-              <p className="mb-4 text-xs text-muted">Only visible to you.</p>
+              <p className="mb-4 text-xs text-muted">
+                Only visible to you. <QuickVisibilityToggle profileId={profile.id} />
+              </p>
             )}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {cards.map((card) => (
