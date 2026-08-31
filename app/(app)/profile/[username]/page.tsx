@@ -19,6 +19,7 @@ const ROLE_LABEL: Record<string, string> = {
 const TABS = [
   { key: "collection", label: "My Collection" },
   { key: "trade", label: "For Trade" },
+  { key: "traded", label: "Traded" },
   { key: "looking", label: "Looking For" },
 ] as const;
 
@@ -113,13 +114,14 @@ export default async function ProfilePage({
       .order("created_at", { ascending: false });
     lookingFor = data ?? [];
   } else {
-    const status = activeTab === "trade" ? "for_trade" : "personal_collection";
+    const status =
+      activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
     const { data } = await supabase
       .from("cards")
       .select("*")
       .eq("owner_id", profile.id)
       .eq("status", status)
-      .order("created_at", { ascending: false });
+      .order(activeTab === "traded" ? "traded_at" : "created_at", { ascending: false });
     cards = data ?? [];
   }
 

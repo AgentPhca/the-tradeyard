@@ -21,7 +21,8 @@ export default async function DashboardPage() {
         supabase
           .from("cards")
           .select("id", { count: "exact", head: true })
-          .eq("owner_id", user.id),
+          .eq("owner_id", user.id)
+          .neq("status", "traded"),
         supabase
           .from("cards")
           .select("id", { count: "exact", head: true })

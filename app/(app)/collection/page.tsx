@@ -16,6 +16,7 @@ export default async function CollectionPage() {
       .from("cards")
       .select("*")
       .eq("owner_id", user.id)
+      .neq("status", "traded")
       .order("created_at", { ascending: false });
     cards = data ?? [];
   }

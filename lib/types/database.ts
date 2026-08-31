@@ -1,5 +1,5 @@
 export type UserRole = "collector" | "retailer" | "streamer";
-export type CardStatus = "personal_collection" | "for_trade";
+export type CardStatus = "personal_collection" | "for_trade" | "traded";
 export type TradeStatus = "pending" | "accepted" | "completed" | "declined";
 
 export type Profile = {
@@ -33,6 +33,7 @@ export type Card = {
   status: CardStatus;
   image_url: string | null;
   notes: string | null;
+  traded_at: string | null;
   created_at: string;
 };
 

@@ -15,7 +15,7 @@ create extension if not exists "pgcrypto";
 -- Enums
 -- ----------------------------------------------------------------------------
 create type public.user_role as enum ('collector', 'retailer', 'streamer');
-create type public.card_status as enum ('personal_collection', 'for_trade');
+create type public.card_status as enum ('personal_collection', 'for_trade', 'traded');
 create type public.trade_status as enum ('pending', 'accepted', 'completed', 'declined');
 
 -- ----------------------------------------------------------------------------
@@ -100,6 +100,7 @@ create table public.cards (
   status public.card_status not null default 'personal_collection',
   image_url text,
   notes text,
+  traded_at timestamptz,
   created_at timestamptz not null default now()
 );
 

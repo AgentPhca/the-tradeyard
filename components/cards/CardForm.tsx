@@ -236,6 +236,14 @@ export function CardForm({ mode, card }: CardFormProps) {
       imageUrl = publicUrl;
     }
 
+    // Keep the original traded_at when the card was already traded and stays
+    // traded; only stamp a fresh timestamp on the transition into "traded",
+    // and clear it if the status is changed away from "traded".
+    let tradedAt: string | null = null;
+    if (status === "traded") {
+      tradedAt = card?.status === "traded" ? (card.traded_at ?? new Date().toISOString()) : new Date().toISOString();
+    }
+
     const payload = {
       player_name: playerName,
       team: team || null,
@@ -250,6 +258,7 @@ export function CardForm({ mode, card }: CardFormProps) {
       is_relic: isRelic,
       status,
       image_url: imageUrl,
+      traded_at: tradedAt,
     };
 
     const { error: saveError } =
@@ -522,6 +531,7 @@ export function CardForm({ mode, card }: CardFormProps) {
           >
             <option value="personal_collection">Personal Collection</option>
             <option value="for_trade">For Trade</option>
+            <option value="traded">Traded</option>
           </Select>
         </div>
 

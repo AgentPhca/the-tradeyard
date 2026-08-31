@@ -4,7 +4,16 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, ImageOff, MessageCircle, Pencil, PenLine, Shirt, Trash2 } from "lucide-react";
+import {
+  Handshake,
+  Heart,
+  ImageOff,
+  MessageCircle,
+  Pencil,
+  PenLine,
+  Shirt,
+  Trash2,
+} from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
@@ -39,8 +48,12 @@ export function TradingCard({
   const [saved, setSaved] = useState(isSaved);
   const [togglingSave, setTogglingSave] = useState(false);
   const [contacting, setContacting] = useState(false);
+  const [tradedConfirmOpen, setTradedConfirmOpen] = useState(false);
+  const [markingTraded, setMarkingTraded] = useState(false);
+  const [tradedError, setTradedError] = useState<string | null>(null);
 
   const forTrade = card.status === "for_trade";
+  const traded = card.status === "traded";
   const serial =
     card.serial_number && card.print_run
       ? `${card.serial_number}/${card.print_run}`
@@ -92,6 +105,26 @@ export function TradingCard({
     }
 
     setTogglingSave(false);
+    router.refresh();
+  }
+
+  async function handleMarkTraded() {
+    setMarkingTraded(true);
+    setTradedError(null);
+
+    const { error } = await supabase
+      .from("cards")
+      .update({ status: "traded", traded_at: new Date().toISOString() })
+      .eq("id", card.id);
+
+    if (error) {
+      setTradedError(error.message);
+      setMarkingTraded(false);
+      return;
+    }
+
+    setMarkingTraded(false);
+    setTradedConfirmOpen(false);
     router.refresh();
   }
 
@@ -151,6 +184,16 @@ export function TradingCard({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
+                {!traded && (
+                  <button
+                    type="button"
+                    title="Mark as traded"
+                    onClick={() => setTradedConfirmOpen(true)}
+                    className="rounded-full bg-background/80 p-1.5 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary"
+                  >
+                    <Handshake className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </>
             )}
             {showSaveButton && (
@@ -168,11 +211,15 @@ export function TradingCard({
         )}
         <div className="absolute right-2 top-2">
           <span
-            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-text ${
-              forTrade ? "bg-[#14532D]" : "bg-[#21262D]"
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+              traded
+                ? "bg-[#30363D] text-muted"
+                : forTrade
+                  ? "bg-[#14532D] text-text"
+                  : "bg-[#21262D] text-text"
             }`}
           >
-            {forTrade ? "For Trade" : "Personal Collection"}
+            {traded ? "Traded" : forTrade ? "For Trade" : "Personal Collection"}
           </span>
         </div>
       </div>
@@ -242,6 +289,24 @@ export function TradingCard({
           confirming={deleting}
           onConfirm={handleDelete}
           onCancel={() => setConfirmOpen(false)}
+        />
+      )}
+
+      {isOwner && !traded && (
+        <ConfirmDialog
+          open={tradedConfirmOpen}
+          title="Mark this card as traded?"
+          description={
+            <>
+              {card.player_name} will move to your Traded history and disappear from your
+              active Collection and the Marketplace.
+              {tradedError && <span className="mt-2 block text-red-400">{tradedError}</span>}
+            </>
+          }
+          confirmLabel="Mark as traded"
+          confirming={markingTraded}
+          onConfirm={handleMarkTraded}
+          onCancel={() => setTradedConfirmOpen(false)}
         />
       )}
     </div>
