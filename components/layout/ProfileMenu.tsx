@@ -24,9 +24,17 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
   const router = useRouter();
   const supabase = createClient();
   const [open, setOpen] = useState(false);
-  const [allowContact, setAllowContact] = useState(profile.allow_contact);
+  const [allowContact, setAllowContact] = useState(profile.allow_contact ?? true);
   const [updatingContact, setUpdatingContact] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Keep the toggle in sync with the server-provided value. profile is
+  // refetched on every navigation/refresh (see AppLayout), but useState's
+  // initializer only runs once on mount, so without this the switch could
+  // keep showing a stale value from an earlier render.
+  useEffect(() => {
+    setAllowContact(profile.allow_contact ?? true);
+  }, [profile.allow_contact]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
