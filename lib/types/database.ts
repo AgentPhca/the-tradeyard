@@ -138,6 +138,17 @@ export type CardCatalogInsertSet = {
   is_relic: boolean;
 };
 
+export type Parallel = {
+  id: string;
+  set_name: string;
+  parallel_name: string;
+  print_run: number | null;
+  sku_exclusivity: string | null;
+  tier: string | null;
+  base_type: string | null;
+  sort_order: number;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -263,6 +274,12 @@ export interface Database {
         Insert: Partial<CardCatalogEntry> &
           Pick<CardCatalogEntry, "set_name" | "player_name">;
         Update: Partial<CardCatalogEntry>;
+        Relationships: [];
+      };
+      parallels: {
+        Row: Parallel;
+        Insert: Partial<Parallel> & Pick<Parallel, "set_name" | "parallel_name" | "sort_order">;
+        Update: Partial<Parallel>;
         Relationships: [];
       };
       saved_cards: {

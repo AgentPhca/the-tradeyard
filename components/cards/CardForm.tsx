@@ -9,15 +9,25 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
-import { CARD_SETS, PARALLELS, AUTO_PARALLELS, CONDITIONS } from "@/lib/data/cardCatalog";
+import { CARD_SETS, CONDITIONS } from "@/lib/data/cardCatalog";
 import { titleCase } from "@/lib/utils/text";
 import type {
   Card,
   CardCatalogEntry,
   CardCatalogInsertSet,
   CardStatus,
+  Parallel,
   UserRole,
 } from "@/lib/types/database";
+
+const FINEST_SET_NAME = "2025 Topps Finest Football";
+const SIGNATURE_CLASS_SET_NAME = "2025 Topps Signature Class Football";
+
+function parallelLabel(p: Pick<Parallel, "parallel_name" | "print_run" | "sku_exclusivity">) {
+  const printRunSuffix = p.print_run != null ? ` /${p.print_run}` : "";
+  const exclusivitySuffix = p.sku_exclusivity ? ` (${p.sku_exclusivity})` : "";
+  return `${p.parallel_name}${printRunSuffix}${exclusivitySuffix}`;
+}
 
 type CatalogMatch = Pick<
   CardCatalogEntry,
@@ -48,6 +58,8 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [insertSet, setInsertSet] = useState(card?.insert_set ?? "");
   const [isVariationOfBase, setIsVariationOfBase] = useState(card?.is_variation_of_base ?? false);
   const [parallel, setParallel] = useState(card?.parallel ?? "");
+  const [tier, setTier] = useState("");
+  const [baseType, setBaseType] = useState("");
   const [serialNumber, setSerialNumber] = useState(card?.serial_number ?? "");
   const [printRun, setPrintRun] = useState(card?.print_run != null ? String(card.print_run) : "");
   const [condition, setCondition] = useState(card?.condition ?? "");
@@ -62,6 +74,7 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [catalogMatches, setCatalogMatches] = useState<CatalogMatch[]>([]);
   const [showMatches, setShowMatches] = useState(false);
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
+  const [parallelOptions, setParallelOptions] = useState<Parallel[]>([]);
   const suppressLookup = useRef(Boolean(card));
   const suppressSetReset = useRef(Boolean(card));
 
@@ -127,9 +140,38 @@ export function CardForm({ mode, card }: CardFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setName]);
 
+  // Populate the Parallel dropdown from the real, researched parallel data,
+  // scoped to whichever Set is currently chosen. For Finest and Signature
+  // Class this still fetches every row for the set (all tiers / base types
+  // stacked together) — see filteredParallels below for the tier/base-type
+  // split, since the same parallel_name means a different print run
+  // depending on which one applies.
+  useEffect(() => {
+    if (!setName) {
+      setParallelOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await supabase
+        .from("parallels")
+        .select("id, set_name, parallel_name, print_run, sku_exclusivity, tier, base_type, sort_order")
+        .eq("set_name", setName)
+        .order("sort_order");
+      if (!cancelled) setParallelOptions(data ?? []);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setName]);
+
   // Changing the Set manually (not via a catalog pick, and not on initial
   // load of an existing card) means the previous Insert Set / Auto / Relic
-  // selections no longer apply.
+  // / Parallel / Tier / Base Type selections no longer apply.
   useEffect(() => {
     if (suppressSetReset.current) {
       suppressSetReset.current = false;
@@ -139,8 +181,38 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsAutograph(false);
     setIsRelic(false);
     setIsVariationOfBase(false);
+    setParallel("");
+    setTier("");
+    setBaseType("");
+    setPrintRun("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setName]);
+
+  const isFinestSet = setName === FINEST_SET_NAME;
+  const isSignatureClassSet = setName === SIGNATURE_CLASS_SET_NAME;
+
+  const filteredParallels = isFinestSet
+    ? parallelOptions.filter((p) => p.tier === tier)
+    : isSignatureClassSet
+      ? parallelOptions.filter((p) => p.base_type === baseType)
+      : parallelOptions;
+
+  const parallelDisabled =
+    !setName || (isFinestSet && !tier) || (isSignatureClassSet && !baseType);
+
+  const parallelPlaceholder = !setName
+    ? "Select a set first"
+    : isFinestSet && !tier
+      ? "Select a tier first"
+      : isSignatureClassSet && !baseType
+        ? "Select a base type first"
+        : "Select a parallel";
+
+  function handleParallelChange(value: string) {
+    setParallel(value);
+    const option = filteredParallels.find((p) => p.parallel_name === value);
+    setPrintRun(option?.print_run != null ? String(option.print_run) : "");
+  }
 
   function selectCatalogMatch(match: CatalogMatch) {
     suppressLookup.current = true;
@@ -449,27 +521,66 @@ export function CardForm({ mode, card }: CardFormProps) {
           </label>
         </div>
 
+        {isFinestSet && (
+          <div>
+            <label htmlFor="tier" className="mb-1.5 block text-sm font-medium text-text">
+              Tier
+            </label>
+            <Select
+              id="tier"
+              value={tier}
+              onChange={(e) => {
+                setTier(e.target.value);
+                setParallel("");
+                setPrintRun("");
+              }}
+            >
+              <option value="">Select a tier</option>
+              <option value="Common">Common</option>
+              <option value="Uncommon">Uncommon</option>
+              <option value="Rare">Rare</option>
+            </Select>
+          </div>
+        )}
+
+        {isSignatureClassSet && (
+          <div>
+            <label htmlFor="baseType" className="mb-1.5 block text-sm font-medium text-text">
+              Base Type
+            </label>
+            <Select
+              id="baseType"
+              value={baseType}
+              onChange={(e) => {
+                setBaseType(e.target.value);
+                setParallel("");
+                setPrintRun("");
+              }}
+            >
+              <option value="">Select a base type</option>
+              <option value="Chrome">Chrome</option>
+              <option value="Paper">Paper</option>
+            </Select>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="parallel" className="mb-1.5 block text-sm font-medium text-text">
               Parallel
             </label>
-            <Select id="parallel" value={parallel} onChange={(e) => setParallel(e.target.value)}>
-              <option value="">Select a parallel</option>
-              <optgroup label="Parallels">
-                {PARALLELS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Autograph parallels">
-                {AUTO_PARALLELS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </optgroup>
+            <Select
+              id="parallel"
+              value={parallel}
+              onChange={(e) => handleParallelChange(e.target.value)}
+              disabled={parallelDisabled}
+            >
+              <option value="">{parallelPlaceholder}</option>
+              {filteredParallels.map((p) => (
+                <option key={p.id} value={p.parallel_name}>
+                  {parallelLabel(p)}
+                </option>
+              ))}
             </Select>
           </div>
 
