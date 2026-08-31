@@ -35,20 +35,22 @@ export default async function CardDetailPage({
 
   const isOwner = user?.id === card.owner_id;
 
-  // Personal-collection cards are private to their owner on this page.
-  // (Note: the Profile page's "My Collection" tab currently shows these to
-  // any visitor — this route is intentionally stricter for direct links.)
-  if (!isOwner && card.status === "personal_collection") {
-    notFound();
-  }
-
   const { data: owner } = await supabase
     .from("profiles")
-    .select("username, avatar_url, role, allow_contact")
+    .select("username, avatar_url, role, allow_contact, show_personal_collection")
     .eq("id", card.owner_id)
     .single();
 
   if (!owner) {
+    notFound();
+  }
+
+  // Personal-collection cards are private to their owner unless the owner
+  // has opted in via show_personal_collection — the same rule the cards
+  // RLS policy enforces at the database level, and the same rule the
+  // Profile page's "My Collection" tab now uses, so this route and the
+  // profile grid stay consistent.
+  if (!isOwner && card.status === "personal_collection" && !owner.show_personal_collection) {
     notFound();
   }
 

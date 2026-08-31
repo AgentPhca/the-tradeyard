@@ -33,6 +33,7 @@ create table public.profiles (
   whatnot_url text,
   website_url text,
   allow_contact boolean not null default true,
+  show_personal_collection boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -347,10 +348,21 @@ create policy "Users can delete their own profile"
 -- Any authenticated user can browse any card (collections + marketplace are
 -- both public within the app); only the owner can create/edit/delete.
 -- ----------------------------------------------------------------------------
-create policy "Cards are viewable by authenticated users"
+-- For-trade and traded cards are visible to everyone; a personal_collection
+-- card is only visible to its owner unless that owner has opted in via
+-- profiles.show_personal_collection.
+create policy "Cards are viewable respecting personal collection privacy"
   on public.cards for select
   to authenticated
-  using (true);
+  using (
+    status <> 'personal_collection'
+    or owner_id = auth.uid()
+    or exists (
+      select 1 from public.profiles p
+      where p.id = cards.owner_id
+        and p.show_personal_collection = true
+    )
+  );
 
 create policy "Users can add cards to their own collection"
   on public.cards for insert

@@ -103,6 +103,13 @@ export default async function ProfilePage({
     }
   }
 
+  // Personal Collection cards are opt-in for non-owner viewers (see
+  // profiles.show_personal_collection + the cards RLS policy, which
+  // enforces this same rule at the database level). The app-level check
+  // here is what lets us show an explanatory message instead of just an
+  // empty grid.
+  const collectionHiddenFromViewer = !isOwnProfile && !profile.show_personal_collection;
+
   let cards: Card[] = [];
   let lookingFor: Wishlist[] = [];
 
@@ -113,7 +120,7 @@ export default async function ProfilePage({
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false });
     lookingFor = data ?? [];
-  } else {
+  } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
     const status =
       activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
     const { data } = await supabase
@@ -124,6 +131,11 @@ export default async function ProfilePage({
       .order(activeTab === "traded" ? "traded_at" : "created_at", { ascending: false });
     cards = data ?? [];
   }
+
+  const memberSince = new Date(profile.created_at).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 
   const socialLinks = [
     { url: profile.twitch_url, label: "Twitch", icon: Radio },
@@ -141,6 +153,7 @@ export default async function ProfilePage({
             <Badge>{ROLE_LABEL[profile.role] ?? profile.role}</Badge>
           </div>
           <p className="text-sm text-muted">@{profile.username}</p>
+          <p className="mt-0.5 text-xs text-muted">Member since {memberSince}</p>
           {profile.bio && <p className="mt-2 max-w-xl text-sm text-text">{profile.bio}</p>}
 
           {socialLinks.length > 0 && (
@@ -231,19 +244,28 @@ export default async function ProfilePage({
               ))}
             </div>
           )
+        ) : activeTab === "collection" && collectionHiddenFromViewer ? (
+          <p className="text-sm text-muted">
+            This user doesn&rsquo;t show their Personal Collection publicly.
+          </p>
         ) : cards.length === 0 ? (
           <p className="text-sm text-muted">No cards to show yet.</p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {cards.map((card) => (
-              <TradingCard
-                key={card.id}
-                card={card}
-                isOwner={isOwnProfile}
-                ownerAllowsContact={profile.allow_contact}
-              />
-            ))}
-          </div>
+          <>
+            {activeTab === "collection" && isOwnProfile && !profile.show_personal_collection && (
+              <p className="mb-4 text-xs text-muted">Only visible to you.</p>
+            )}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {cards.map((card) => (
+                <TradingCard
+                  key={card.id}
+                  card={card}
+                  isOwner={isOwnProfile}
+                  ownerAllowsContact={profile.allow_contact}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

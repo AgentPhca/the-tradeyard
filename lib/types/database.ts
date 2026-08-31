@@ -13,6 +13,7 @@ export type Profile = {
   whatnot_url: string | null;
   website_url: string | null;
   allow_contact: boolean;
+  show_personal_collection: boolean;
   created_at: string;
 };
 
