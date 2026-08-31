@@ -152,19 +152,21 @@ export function TradingCard({
   return (
     <div className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
       <div className="relative aspect-[5/7] w-full bg-surface">
-        {card.image_url ? (
-          <Image
-            src={card.image_url}
-            alt={`${card.player_name} card`}
-            fill
-            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageOff className="h-8 w-8 text-muted" />
-          </div>
-        )}
+        <Link href={`/collection/${card.id}`} className="absolute inset-0 block">
+          {card.image_url ? (
+            <Image
+              src={card.image_url}
+              alt={`${card.player_name} card`}
+              fill
+              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <ImageOff className="h-8 w-8 text-muted" />
+            </div>
+          )}
+        </Link>
         {(isOwner || showSaveButton) && (
           <div className="absolute left-2 top-2 flex gap-1">
             {isOwner && (
@@ -226,7 +228,11 @@ export function TradingCard({
 
       <div className="flex flex-1 flex-col gap-1 p-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="truncate font-semibold text-text">{card.player_name}</h3>
+          <Link href={`/collection/${card.id}`} className="min-w-0 truncate">
+            <h3 className="truncate font-semibold text-text hover:text-primary">
+              {card.player_name}
+            </h3>
+          </Link>
           {(card.is_autograph || card.is_relic) && (
             <span className="flex shrink-0 gap-1">
               {card.is_autograph && (
