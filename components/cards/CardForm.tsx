@@ -34,6 +34,55 @@ type CatalogMatch = Pick<
   | "is_relic"
 >;
 
+// Raw rows to pull per search: player_name is stored "First Last", so a
+// common-surname search (e.g. "Williams") matches every player with that
+// surname, ordered alphabetically by full name. A single popular rookie
+// can have dozens of catalog rows (one per insert set/parallel/autograph
+// variant across all 7 sets) — measured up to 95 for one player alone —
+// so the raw fetch has to be big enough to read past that one player's
+// whole block and reach the next different one.
+const CATALOG_SEARCH_RAW_LIMIT = 300;
+// Of the (up to 20) distinct players found, how many total rows to show —
+// keeps the dropdown scannable while still surfacing several variants for
+// a narrow/specific search that only matches one or two real players.
+const CATALOG_SEARCH_MAX_PLAYERS = 20;
+const CATALOG_SEARCH_MAX_ROWS = 25;
+
+// Groups raw catalog rows by player identity (name + team, in case two
+// different real people share a name) and round-robins across players
+// when building the final list — round 1 gives every distinct player
+// their first row before anyone gets a second, so a high-volume player
+// can't crowd the dropdown with just their own variants and hide every
+// other same-surname player. A search that only matches one or two real
+// players still naturally fills up to CATALOG_SEARCH_MAX_ROWS from them,
+// since round-robin just keeps cycling through however many players
+// there are.
+function pickDiverseMatches(rawMatches: CatalogMatch[]): CatalogMatch[] {
+  const byPlayer = new Map<string, CatalogMatch[]>();
+  for (const match of rawMatches) {
+    const key = `${match.player_name}|${match.team ?? ""}`;
+    const group = byPlayer.get(key);
+    if (group) group.push(match);
+    else byPlayer.set(key, [match]);
+  }
+
+  const players = Array.from(byPlayer.values()).slice(0, CATALOG_SEARCH_MAX_PLAYERS);
+
+  const result: CatalogMatch[] = [];
+  for (let round = 0; result.length < CATALOG_SEARCH_MAX_ROWS; round++) {
+    let addedAny = false;
+    for (const rows of players) {
+      if (round >= rows.length) continue;
+      result.push(rows[round]);
+      addedAny = true;
+      if (result.length >= CATALOG_SEARCH_MAX_ROWS) break;
+    }
+    if (!addedAny) break;
+  }
+
+  return result;
+}
+
 interface CardFormProps {
   mode: "create" | "edit";
   card?: Card;
@@ -79,7 +128,9 @@ export function CardForm({ mode, card }: CardFormProps) {
 
   // Look up the player against the real Topps checklist (card_catalog) as
   // the user types, so picking a match can auto-fill team + set instead of
-  // typing them by hand.
+  // typing them by hand. Substring match (not prefix) is deliberate:
+  // player_name is stored "First Last", so a prefix-only search for a
+  // surname like "Williams" would never match anything at all.
   useEffect(() => {
     if (suppressLookup.current) {
       suppressLookup.current = false;
@@ -98,8 +149,16 @@ export function CardForm({ mode, card }: CardFormProps) {
         )
         .ilike("player_name", `%${playerName.trim()}%`)
         .order("player_name")
-        .limit(8);
-      setCatalogMatches(data ?? []);
+        // Deterministic tie-break for same-player rows, rather than
+        // relying on whatever order Postgres happens to return ties in.
+        // A side benefit: "2025 Topps Chrome Black Football" sorts first
+        // alphabetically among all 7 sets, so a prolific player's Chrome
+        // Black row lands early within their own group instead of being
+        // pushed past CATALOG_SEARCH_MAX_ROWS by older/larger sets.
+        .order("set_name")
+        .order("card_number")
+        .limit(CATALOG_SEARCH_RAW_LIMIT);
+      setCatalogMatches(pickDiverseMatches(data ?? []));
       setShowMatches(true);
     }, 300);
 
