@@ -22,6 +22,7 @@ export type Card = {
   owner_id: string;
   player_name: string;
   team: string | null;
+  card_number: string | null;
   set_name: string | null;
   insert_set: string | null;
   is_variation_of_base: boolean;

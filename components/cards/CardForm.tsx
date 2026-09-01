@@ -45,6 +45,7 @@ export function CardForm({ mode, card }: CardFormProps) {
 
   const [playerName, setPlayerName] = useState(card?.player_name ?? "");
   const [team, setTeam] = useState(card?.team ?? "");
+  const [cardNumber, setCardNumber] = useState(card?.card_number ?? "");
   const [setName, setSetName] = useState(card?.set_name ?? "");
   const [insertSet, setInsertSet] = useState(card?.insert_set ?? "");
   const [isVariationOfBase, setIsVariationOfBase] = useState(card?.is_variation_of_base ?? false);
@@ -67,6 +68,7 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
   const suppressLookup = useRef(Boolean(card));
   const suppressSetReset = useRef(Boolean(card));
+  const suppressSerialReset = useRef(Boolean(card));
 
   useEffect(() => {
     return () => {
@@ -149,6 +151,25 @@ export function CardForm({ mode, card }: CardFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setName]);
 
+  const hasPrintRun = printRun !== "" && Number(printRun) > 0;
+
+  // "Numbered #" (serial_number) means nothing without a print run, so
+  // clearing Print Run clears it too — but not on the initial load of an
+  // existing card. A card can have serial_number set with print_run empty
+  // as a data relic from before this coupling existed; loading that card
+  // into the form shouldn't silently wipe it, only a live edit that
+  // empties Print Run should.
+  useEffect(() => {
+    if (suppressSerialReset.current) {
+      suppressSerialReset.current = false;
+      return;
+    }
+    if (!hasPrintRun) {
+      setSerialNumber("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [printRun]);
+
   const { parallels: filteredParallels, isFinestSet, isSignatureClassSet } = useParallelsForSet(
     setName,
     tier,
@@ -177,6 +198,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     suppressSetReset.current = true;
     setPlayerName(match.player_name);
     setTeam(match.team ?? "");
+    setCardNumber(match.card_number ?? "");
     setSetName(match.set_name);
     setInsertSet(match.insert_set ?? "");
     setIsAutograph(match.is_autograph);
@@ -277,6 +299,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     const payload = {
       player_name: playerName,
       team: team || null,
+      card_number: cardNumber || null,
       set_name: setName || null,
       insert_set: insertSet || null,
       is_variation_of_base: isVariationOfBase,
@@ -440,6 +463,18 @@ export function CardForm({ mode, card }: CardFormProps) {
         </div>
 
         <div>
+          <label htmlFor="cardNumber" className="mb-1.5 block text-sm font-medium text-text">
+            Card Number
+          </label>
+          <Input
+            id="cardNumber"
+            value={cardNumber}
+            onChange={(e) => setCardNumber(e.target.value)}
+            placeholder="e.g. 88 or RC-15"
+          />
+        </div>
+
+        <div>
           <label htmlFor="insertSet" className="mb-1.5 block text-sm font-medium text-text">
             Insert Set
           </label>
@@ -543,34 +578,6 @@ export function CardForm({ mode, card }: CardFormProps) {
           </div>
 
           <div>
-            <label htmlFor="serialNumber" className="mb-1.5 block text-sm font-medium text-text">
-              Serial number
-            </label>
-            <Input
-              id="serialNumber"
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              placeholder="e.g. 12"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="printRun" className="mb-1.5 block text-sm font-medium text-text">
-              Print run
-            </label>
-            <Input
-              id="printRun"
-              type="number"
-              min={1}
-              value={printRun}
-              onChange={(e) => setPrintRun(e.target.value)}
-              placeholder="e.g. 99"
-            />
-          </div>
-
-          <div>
             <label htmlFor="condition" className="mb-1.5 block text-sm font-medium text-text">
               Condition
             </label>
@@ -586,6 +593,40 @@ export function CardForm({ mode, card }: CardFormProps) {
                 </option>
               ))}
             </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="printRun" className="mb-1.5 block text-sm font-medium text-text">
+              Print run
+            </label>
+            <Input
+              id="printRun"
+              type="number"
+              min={1}
+              value={printRun}
+              onChange={(e) => setPrintRun(e.target.value)}
+              placeholder="e.g. 99 — leave blank if unnumbered"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="serialNumber" className="mb-1.5 block text-sm font-medium text-text">
+              Numbered #
+            </label>
+            <Input
+              id="serialNumber"
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              placeholder="e.g. 10"
+              disabled={!hasPrintRun}
+            />
+            <p className="mt-1 text-xs text-muted">
+              {hasPrintRun
+                ? `Will show as ${serialNumber || "10"}/${printRun}`
+                : "Enter a print run first"}
+            </p>
           </div>
         </div>
 

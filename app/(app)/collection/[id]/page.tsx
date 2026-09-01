@@ -62,10 +62,11 @@ export default async function CardDetailPage({
       : card.serial_number ?? (card.print_run ? `/${card.print_run}` : null);
 
   const details: { label: string; value: string }[] = [
+    { label: "Card Number", value: card.card_number ? `#${card.card_number}` : "" },
     { label: "Set", value: card.set_name ?? "" },
     { label: "Insert Set", value: card.insert_set ? titleCase(card.insert_set) : "" },
     { label: "Parallel", value: card.parallel ?? "" },
-    { label: "Serial Number", value: serial ?? "" },
+    { label: "Numbered #", value: serial ?? "" },
     { label: "Condition", value: card.condition ?? "" },
   ].filter((row) => row.value);
 

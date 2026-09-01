@@ -231,6 +231,9 @@ export function TradingCard({
           <Link href={`/collection/${card.id}`} className="min-w-0 truncate">
             <h3 className="truncate font-semibold text-text hover:text-primary">
               {card.player_name}
+              {card.card_number && (
+                <span className="ml-1.5 font-normal text-muted">#{card.card_number}</span>
+              )}
             </h3>
           </Link>
           {(card.is_autograph || card.is_relic) && (

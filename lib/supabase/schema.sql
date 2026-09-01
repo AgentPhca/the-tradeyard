@@ -83,12 +83,24 @@ create trigger on_auth_user_created
 -- names like "Chrome Radiating Rookies" or "Base Cards Team Camo
 -- Variation". parallel/serial_number/print_run stay free text/number since
 -- the checklists carry no parallel names or print runs at all.
+--
+-- Three distinct, easily-confused "number" concepts live on this table:
+--   - card_number: printed on the card itself (e.g. "88", "RC-15"),
+--     independent of parallel/print run — same meaning as
+--     card_catalog.card_number.
+--   - print_run: the total size of a parallel's numbering (e.g. 99 for a
+--     "/99" card); null means unnumbered.
+--   - serial_number: this specific copy's number within that print run
+--     (e.g. "10" on a 10/99 card) — the app's UI calls this "Numbered #"
+--     and only lets it be set once print_run has a value, since it's
+--     meaningless without one.
 -- ----------------------------------------------------------------------------
 create table public.cards (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles (id) on delete cascade,
   player_name text not null,
   team text,
+  card_number text,
   set_name text,
   insert_set text,
   is_variation_of_base boolean not null default false,
