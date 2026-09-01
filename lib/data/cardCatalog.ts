@@ -2,8 +2,8 @@
 //
 // CARD_SETS is the exact set of distinct `set_name` values found in the
 // imported 2025/2026 Topps checklist (see lib/supabase/card_catalog.sql +
-// card_catalog_import.sql) — real data, not a placeholder. Note there is no
-// "Chrome Black" set in that checklist.
+// card_catalog_import.sql, plus chrome_black_cards_checklist_seed.sql for
+// the 7th set) — real data, not a placeholder.
 //
 // Parallel names now come from public.parallels (see
 // lib/supabase/parallels.sql + parallels_seed_real_parallel_data.sql and
@@ -12,6 +12,7 @@
 // CONDITIONS is likewise a generic, non-catalog-driven suggestion list.
 
 export const CARD_SETS = [
+  "2025 Topps Chrome Black Football",
   "2025 Topps Chrome Football",
   "2025 Topps Cosmic Chrome Football",
   "2025 Topps Finest Football",
