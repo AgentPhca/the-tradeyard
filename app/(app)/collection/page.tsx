@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Layers, Plus } from "lucide-react";
-import { TradingCard } from "@/components/cards/TradingCard";
+import { Plus } from "lucide-react";
+import { CollectionBrowser } from "@/components/collection/CollectionBrowser";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/server";
 import type { Card } from "@/lib/types/database";
@@ -29,12 +29,10 @@ export default async function CollectionPage() {
 
   return (
     <div>
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-text">My Collection</h1>
-          <p className="mt-1 text-sm text-muted">
-            {cards.length} {cards.length === 1 ? "card" : "cards"}
-          </p>
+          <p className="mt-1 text-sm text-muted">Every card you own, all in one place.</p>
         </div>
         <div className="flex items-center gap-4">
           {user && (
@@ -47,20 +45,7 @@ export default async function CollectionPage() {
         </div>
       </div>
 
-      {cards.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
-          <Layers className="h-8 w-8 text-muted" />
-          <p className="mt-4 text-sm text-muted">
-            Your collection is empty. Add your first card to get started.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {cards.map((card) => (
-            <TradingCard key={card.id} card={card} isOwner={card.owner_id === user?.id} />
-          ))}
-        </div>
-      )}
+      <CollectionBrowser cards={cards} />
     </div>
   );
 }
