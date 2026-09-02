@@ -86,8 +86,17 @@ function pickDiverseMatches(rawMatches: CatalogMatch[]): CatalogMatch[] {
 // Columns a search token is allowed to match against — lets a query like
 // "Drake Maye Flagship" find rows where "Drake"/"Maye" match player_name
 // and "Flagship" matches set_name, without requiring every token to hit
-// the same column.
-const CATALOG_SEARCH_COLUMNS = ["player_name", "team", "set_name", "insert_set"] as const;
+// the same column. card_number lets the printed number on the card (e.g.
+// "VT-17") be searched directly, alone or combined with a player/set
+// token — hyphens in values like "VT-17"/"RV-1" have no special meaning
+// in an ilike pattern, so no extra escaping is needed for them.
+const CATALOG_SEARCH_COLUMNS = [
+  "player_name",
+  "team",
+  "set_name",
+  "insert_set",
+  "card_number",
+] as const;
 
 // PostgREST's `.or()` filter string uses "," to separate conditions and
 // "()" to group them, so a token containing those would otherwise corrupt
