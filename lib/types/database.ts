@@ -33,6 +33,7 @@ export type Card = {
   condition: string | null;
   is_autograph: boolean;
   is_relic: boolean;
+  category: string | null;
   status: CardStatus;
   image_url: string | null;
   notes: string | null;

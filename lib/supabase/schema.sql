@@ -111,6 +111,7 @@ create table public.cards (
   condition text,
   is_autograph boolean not null default false,
   is_relic boolean not null default false,
+  category text,
   status public.card_status not null default 'personal_collection',
   image_url text,
   notes text,

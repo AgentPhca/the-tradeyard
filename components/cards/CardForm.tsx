@@ -124,6 +124,7 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [isRookie, setIsRookie] = useState(card?.is_rookie ?? false);
   const [isAutograph, setIsAutograph] = useState(card?.is_autograph ?? false);
   const [isRelic, setIsRelic] = useState(card?.is_relic ?? false);
+  const [category, setCategory] = useState<string | null>(card?.category ?? null);
   const [status, setStatus] = useState<CardStatus>(card?.status ?? "personal_collection");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(card?.image_url ?? null);
@@ -236,6 +237,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsAutograph(false);
     setIsRelic(false);
     setIsVariationOfBase(false);
+    setCategory(null);
     setParallel("");
     setTier("");
     setBaseType("");
@@ -297,6 +299,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsAutograph(match.is_autograph);
     setIsRelic(match.is_relic);
     setIsVariationOfBase(match.is_variation_of_base);
+    setCategory(match.category);
     setShowMatches(false);
     setCatalogMatches([]);
   }
@@ -307,6 +310,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsAutograph(option?.is_autograph ?? false);
     setIsRelic(option?.is_relic ?? false);
     setIsVariationOfBase(option?.is_variation_of_base ?? false);
+    setCategory(option?.category ?? null);
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -403,6 +407,7 @@ export function CardForm({ mode, card }: CardFormProps) {
       condition: condition || null,
       is_autograph: isAutograph,
       is_relic: isRelic,
+      category,
       status,
       image_url: imageUrl,
       traded_at: tradedAt,

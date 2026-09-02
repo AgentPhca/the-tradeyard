@@ -10,11 +10,10 @@ import type { Card } from "@/lib/types/database";
 
 type YardKey = "rookie" | "base" | "auto" | "grail";
 
-// SuperFractors/1-of-1s and other ultra-short print runs are what "grail"
-// means to a collector — 25 is a deliberately generous cutoff (most Topps
-// low-numbered parallels run in the low tens) so GrailYard reliably
-// surfaces something for a typical collection instead of staying empty.
-const GRAIL_PRINT_RUN_MAX = 25;
+// SuperFractors/1-of-1s and other short print runs are what "grail" means
+// to a collector — any relic/patch card counts too, regardless of print
+// run, since a memorabilia card is inherently a chase card even unnumbered.
+const GRAIL_PRINT_RUN_MAX = 50;
 
 interface Yard {
   key: YardKey;
@@ -39,11 +38,13 @@ const YARDS: Yard[] = [
   {
     key: "base",
     label: "BaseYard",
-    description: "Base cards — no parallel, no extras",
+    description: "Base cards from the checklist",
     icon: Layers,
-    // A "base" card here means none of the attributes that make a card
-    // special — no parallel, and none of the rookie/autograph/relic flags.
-    test: (c) => !c.parallel && !c.is_rookie && !c.is_autograph && !c.is_relic,
+    // Driven by card_catalog.category (mirrored onto cards.category on
+    // catalog-match autofill) rather than deriving "base-ness" from other
+    // fields — a card with no catalog match has category = null and won't
+    // show up here.
+    test: (c) => c.category === "Base",
     badgeClass: "bg-sky-500/10 text-sky-400",
     tileBorderClass: "border-border",
   },
@@ -59,9 +60,9 @@ const YARDS: Yard[] = [
   {
     key: "grail",
     label: "GrailYard",
-    description: `Your rarest pulls · print run ≤ ${GRAIL_PRINT_RUN_MAX}`,
+    description: `Your rarest pulls · print run < ${GRAIL_PRINT_RUN_MAX} or relic/patch`,
     icon: Gem,
-    test: (c) => c.print_run != null && c.print_run <= GRAIL_PRINT_RUN_MAX,
+    test: (c) => (c.print_run != null && c.print_run < GRAIL_PRINT_RUN_MAX) || c.is_relic,
     // GrailYard is the "special" one — a distinct amber/gold accent on the
     // tile border itself, not just the icon badge, sets it apart from the
     // other three.
