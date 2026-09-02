@@ -83,6 +83,21 @@ function pickDiverseMatches(rawMatches: CatalogMatch[]): CatalogMatch[] {
   return result;
 }
 
+// Columns a search token is allowed to match against — lets a query like
+// "Drake Maye Flagship" find rows where "Drake"/"Maye" match player_name
+// and "Flagship" matches set_name, without requiring every token to hit
+// the same column.
+const CATALOG_SEARCH_COLUMNS = ["player_name", "team", "set_name", "insert_set"] as const;
+
+// PostgREST's `.or()` filter string uses "," to separate conditions and
+// "()" to group them, so a token containing those would otherwise corrupt
+// the filter instead of just failing to match anything. Strip them —
+// none of player_name/team/set_name/insert_set legitimately contain
+// commas or parens, so this never drops a token a user actually meant.
+function sanitizeSearchToken(token: string): string {
+  return token.replace(/[,()]/g, "");
+}
+
 interface CardFormProps {
   mode: "create" | "edit";
   card?: Card;
@@ -131,23 +146,39 @@ export function CardForm({ mode, card }: CardFormProps) {
   // typing them by hand. Substring match (not prefix) is deliberate:
   // player_name is stored "First Last", so a prefix-only search for a
   // surname like "Williams" would never match anything at all.
+  //
+  // The input is split into whitespace-separated tokens, and a row only
+  // counts as a match if EVERY token hits somewhere across player_name /
+  // team / set_name / insert_set (not necessarily the same column) — so
+  // "Drake Maye Flagship" finds "Drake"+"Maye" in player_name AND
+  // "Flagship" in set_name, letting a set/team name narrow a player
+  // search instead of just being ignored or (worse) required to also
+  // appear in player_name where it never would.
   useEffect(() => {
     if (suppressLookup.current) {
       suppressLookup.current = false;
       return;
     }
-    if (playerName.trim().length < 3) {
+    const tokens = playerName.trim().split(/\s+/).map(sanitizeSearchToken).filter(Boolean);
+    if (playerName.trim().length < 3 || tokens.length === 0) {
       setCatalogMatches([]);
       return;
     }
 
     const timeout = setTimeout(async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("card_catalog")
         .select(
           "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_autograph, is_relic"
-        )
-        .ilike("player_name", `%${playerName.trim()}%`)
+        );
+
+      for (const token of tokens) {
+        query = query.or(
+          CATALOG_SEARCH_COLUMNS.map((column) => `${column}.ilike.%${token}%`).join(",")
+        );
+      }
+
+      const { data } = await query
         .order("player_name")
         // Deterministic tie-break for same-player rows, rather than
         // relying on whatever order Postgres happens to return ties in.
