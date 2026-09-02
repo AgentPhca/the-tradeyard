@@ -1,11 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Gem, Layers, PenTool, Sparkles } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
+import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
+import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
-type FolderKey = "rookie" | "auto" | "base" | "grail";
+type YardKey = "rookie" | "base" | "auto" | "grail";
 
 // SuperFractors/1-of-1s and other ultra-short print runs are what "grail"
 // means to a collector — 25 is a deliberately generous cutoff (most Topps
@@ -13,40 +16,99 @@ type FolderKey = "rookie" | "auto" | "base" | "grail";
 // surfaces something for a typical collection instead of staying empty.
 const GRAIL_PRINT_RUN_MAX = 25;
 
-const FOLDERS: { key: FolderKey; label: string; test: (card: Card) => boolean }[] = [
-  { key: "rookie", label: "RookieYard", test: (c) => c.is_rookie },
-  { key: "auto", label: "AutoYard", test: (c) => c.is_autograph },
-  // A "base" card here means none of the attributes that make a card
-  // special — no parallel, and none of the rookie/autograph/relic flags.
+interface Yard {
+  key: YardKey;
+  label: string;
+  description: string;
+  icon: typeof Sparkles;
+  test: (card: Card) => boolean;
+  badgeClass: string;
+  tileBorderClass: string;
+}
+
+const YARDS: Yard[] = [
+  {
+    key: "rookie",
+    label: "RookieYard",
+    description: "Rookie cards from your collection",
+    icon: Sparkles,
+    test: (c) => c.is_rookie,
+    badgeClass: "bg-primary/10 text-primary",
+    tileBorderClass: "border-border",
+  },
   {
     key: "base",
     label: "BaseYard",
+    description: "Base cards — no parallel, no extras",
+    icon: Layers,
+    // A "base" card here means none of the attributes that make a card
+    // special — no parallel, and none of the rookie/autograph/relic flags.
     test: (c) => !c.parallel && !c.is_rookie && !c.is_autograph && !c.is_relic,
+    badgeClass: "bg-sky-500/10 text-sky-400",
+    tileBorderClass: "border-border",
+  },
+  {
+    key: "auto",
+    label: "AutoYard",
+    description: "Autographed cards",
+    icon: PenTool,
+    test: (c) => c.is_autograph,
+    badgeClass: "bg-violet-500/10 text-violet-400",
+    tileBorderClass: "border-border",
   },
   {
     key: "grail",
     label: "GrailYard",
+    description: `Your rarest pulls · print run ≤ ${GRAIL_PRINT_RUN_MAX}`,
+    icon: Gem,
     test: (c) => c.print_run != null && c.print_run <= GRAIL_PRINT_RUN_MAX,
+    // GrailYard is the "special" one — a distinct amber/gold accent on the
+    // tile border itself, not just the icon badge, sets it apart from the
+    // other three.
+    badgeClass: "bg-amber-500/10 text-amber-400",
+    tileBorderClass: "border-amber-500/30",
   },
 ];
 
-// Beyond this many distinct teams, collapse the row behind a "+N more"
-// toggle rather than letting it grow unbounded.
-const TEAM_CHIP_LIMIT = 9;
-
-const chipBaseClass =
-  "shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors";
-const chipInactiveClass = "border-border bg-surface text-muted hover:border-primary/40 hover:text-text";
-const chipActiveClass = "border-primary/30 bg-primary/10 text-primary";
+function uniqueOptions(values: (string | null)[], label: (value: string) => string): FilterSelectOption[] {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (value) seen.add(value);
+  }
+  return Array.from(seen)
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value, label: label(value) }));
+}
 
 interface CollectionBrowserProps {
   cards: Card[];
 }
 
 export function CollectionBrowser({ cards }: CollectionBrowserProps) {
-  const [activeFolder, setActiveFolder] = useState<FolderKey | null>(null);
-  const [activeTeam, setActiveTeam] = useState<string | null>(null);
-  const [showAllTeams, setShowAllTeams] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const yardParam = searchParams.get("yard");
+  const activeYard = YARDS.find((y) => y.key === yardParam) ?? null;
+
+  function setYard(key: YardKey | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (key) params.set("yard", key);
+    else params.delete("yard");
+    router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+  }
+
+  const [team, setTeam] = useState("");
+  const [setName, setSetName] = useState("");
+  const [insertSet, setInsertSet] = useState("");
+  const [parallel, setParallel] = useState("");
+
+  function handleSetChange(value: string) {
+    setSetName(value);
+    setInsertSet("");
+    setParallel("");
+  }
 
   const stats = useMemo(() => {
     const sets = new Set(cards.map((c) => c.set_name).filter(Boolean));
@@ -58,35 +120,53 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
     };
   }, [cards]);
 
-  const folderCounts = useMemo(() => {
-    const counts = new Map<FolderKey, number>();
-    for (const folder of FOLDERS) {
-      counts.set(folder.key, cards.filter(folder.test).length);
-    }
-    return counts;
-  }, [cards]);
+  // Filter-bar option lists are scoped to the user's own collection, not
+  // the global catalog (unlike Marketplace) — Insert Set / Parallel are
+  // further scoped to the chosen Set, same cascading pattern as Marketplace.
+  const teamOptions = useMemo(() => uniqueOptions(cards.map((c) => c.team), (v) => v), [cards]);
+  const setOptions = useMemo(
+    () => uniqueOptions(cards.map((c) => c.set_name), (v) => v),
+    [cards]
+  );
+  const cardsInSet = useMemo(
+    () => (setName ? cards.filter((c) => c.set_name === setName) : cards),
+    [cards, setName]
+  );
+  const insertSetOptions = useMemo(
+    () => uniqueOptions(cardsInSet.map((c) => c.insert_set), titleCase),
+    [cardsInSet]
+  );
+  const parallelOptions = useMemo(
+    () => uniqueOptions(cardsInSet.map((c) => c.parallel), (v) => v),
+    [cardsInSet]
+  );
 
-  const teamCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const card of cards) {
-      if (!card.team) continue;
-      counts.set(card.team, (counts.get(card.team) ?? 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .map(([team, count]) => ({ team, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [cards]);
-
-  const visibleTeams = showAllTeams ? teamCounts : teamCounts.slice(0, TEAM_CHIP_LIMIT);
-
-  const filteredCards = useMemo(() => {
-    const folder = activeFolder ? FOLDERS.find((f) => f.key === activeFolder) : null;
+  // Cards after the (always-visible) filter bar, before the active yard is
+  // applied — used both for the final grid and for the yard tile counts, so
+  // a filter-bar selection (e.g. a team) narrows what each yard's counter
+  // shows too.
+  const filterBarCards = useMemo(() => {
     return cards.filter((card) => {
-      if (folder && !folder.test(card)) return false;
-      if (activeTeam && card.team !== activeTeam) return false;
+      if (team && card.team !== team) return false;
+      if (setName && card.set_name !== setName) return false;
+      if (insertSet && card.insert_set !== insertSet) return false;
+      if (parallel && card.parallel !== parallel) return false;
       return true;
     });
-  }, [cards, activeFolder, activeTeam]);
+  }, [cards, team, setName, insertSet, parallel]);
+
+  const yardCounts = useMemo(() => {
+    const counts = new Map<YardKey, number>();
+    for (const yard of YARDS) {
+      counts.set(yard.key, filterBarCards.filter(yard.test).length);
+    }
+    return counts;
+  }, [filterBarCards]);
+
+  const filteredCards = useMemo(() => {
+    if (!activeYard) return filterBarCards;
+    return filterBarCards.filter(activeYard.test);
+  }, [filterBarCards, activeYard]);
 
   if (cards.length === 0) {
     return (
@@ -106,48 +186,72 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
         {stats.sets === 1 ? "set" : "sets"} · {stats.rookies} rookies · {stats.autos} autos
       </p>
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        {FOLDERS.map((folder) => {
-          const active = activeFolder === folder.key;
-          return (
-            <button
-              key={folder.key}
-              type="button"
-              onClick={() => setActiveFolder(active ? null : folder.key)}
-              className={`${chipBaseClass} ${active ? chipActiveClass : chipInactiveClass}`}
+      {activeYard ? (
+        <div
+          className={`mb-4 flex items-center justify-between gap-4 rounded-xl border ${activeYard.tileBorderClass} bg-surface p-4`}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activeYard.badgeClass}`}
             >
-              {folder.label} ({folderCounts.get(folder.key) ?? 0})
-            </button>
-          );
-        })}
-      </div>
-
-      {teamCounts.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-2 overflow-x-auto">
-          {visibleTeams.map(({ team, count }) => {
-            const active = activeTeam === team;
-            return (
-              <button
-                key={team}
-                type="button"
-                onClick={() => setActiveTeam(active ? null : team)}
-                className={`${chipBaseClass} ${active ? chipActiveClass : chipInactiveClass}`}
+              <activeYard.icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold text-text">{activeYard.label}</p>
+              <p className="text-xs text-muted">{activeYard.description}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setYard(null)}
+            className="flex shrink-0 items-center gap-1 text-sm font-medium text-muted hover:text-text"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            All yards
+          </button>
+        </div>
+      ) : (
+        <div className="mb-4 flex gap-3 overflow-x-auto pb-1">
+          {YARDS.map((yard) => (
+            <button
+              key={yard.key}
+              type="button"
+              onClick={() => setYard(yard.key)}
+              className={`flex w-[150px] shrink-0 flex-col gap-3 rounded-xl border ${yard.tileBorderClass} bg-surface p-4 text-left transition-colors hover:border-primary/40`}
+            >
+              <span
+                className={`flex h-9 w-9 items-center justify-center rounded-lg ${yard.badgeClass}`}
               >
-                {team} ({count})
-              </button>
-            );
-          })}
-          {teamCounts.length > TEAM_CHIP_LIMIT && (
-            <button
-              type="button"
-              onClick={() => setShowAllTeams((v) => !v)}
-              className="shrink-0 whitespace-nowrap text-xs font-medium text-muted underline hover:text-text"
-            >
-              {showAllTeams ? "Show less" : `+${teamCounts.length - TEAM_CHIP_LIMIT} more`}
+                <yard.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-semibold text-text">{yard.label}</p>
+                <p className="text-xs text-muted">
+                  {yardCounts.get(yard.key) ?? 0}{" "}
+                  {(yardCounts.get(yard.key) ?? 0) === 1 ? "card" : "cards"}
+                </p>
+              </div>
             </button>
-          )}
+          ))}
         </div>
       )}
+
+      <div className="mb-6 rounded-lg border border-border bg-surface p-4">
+        <FilterSelectRow
+          team={team}
+          onTeamChange={setTeam}
+          teamOptions={teamOptions}
+          setName={setName}
+          onSetChange={handleSetChange}
+          setOptions={setOptions}
+          insertSet={insertSet}
+          onInsertSetChange={setInsertSet}
+          insertSetOptions={insertSetOptions}
+          parallel={parallel}
+          onParallelChange={setParallel}
+          parallelOptions={parallelOptions}
+        />
+      </div>
 
       {filteredCards.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Plus } from "lucide-react";
 import { CollectionBrowser } from "@/components/collection/CollectionBrowser";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
@@ -45,7 +46,9 @@ export default async function CollectionPage() {
         </div>
       </div>
 
-      <CollectionBrowser cards={cards} />
+      <Suspense fallback={null}>
+        <CollectionBrowser cards={cards} />
+      </Suspense>
     </div>
   );
 }

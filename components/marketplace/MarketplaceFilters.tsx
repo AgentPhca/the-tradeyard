@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
+import { FilterSelectRow } from "@/components/cards/FilterSelectRow";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { CARD_SETS } from "@/lib/data/cardCatalog";
@@ -45,6 +45,25 @@ export function MarketplaceFilters() {
       return true;
     });
   }, [rawParallels]);
+
+  const teamSelectOptions = useMemo(() => NFL_TEAMS.map((t) => ({ value: t, label: t })), []);
+  const setSelectOptions = useMemo(() => CARD_SETS.map((s) => ({ value: s, label: s })), []);
+  const insertSetSelectOptions = useMemo(
+    () =>
+      insertSetOptions.map((option) => ({
+        value: option.insert_set,
+        label: titleCase(option.insert_set),
+      })),
+    [insertSetOptions]
+  );
+  const parallelSelectOptions = useMemo(
+    () =>
+      parallelOptions.map((p) => ({
+        value: p.parallel_name,
+        label: p.sku_exclusivity ? `${p.parallel_name} (${p.sku_exclusivity})` : p.parallel_name,
+      })),
+    [parallelOptions]
+  );
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -106,55 +125,20 @@ export function MarketplaceFilters() {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <Select value={team} onChange={(e) => updateParams({ team: e.target.value })}>
-          <option value="">All teams</option>
-          {NFL_TEAMS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={setName}
-          onChange={(e) => updateParams({ set: e.target.value, insertSet: "", parallel: "" })}
-        >
-          <option value="">All sets</option>
-          {CARD_SETS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={insertSet}
-          onChange={(e) => updateParams({ insertSet: e.target.value })}
-          disabled={!setName}
-        >
-          <option value="">{setName ? "All insert sets" : "Select a set first"}</option>
-          {insertSetOptions.map((option) => (
-            <option key={option.insert_set} value={option.insert_set}>
-              {titleCase(option.insert_set)}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={parallel}
-          onChange={(e) => updateParams({ parallel: e.target.value })}
-          disabled={!setName}
-        >
-          <option value="">{setName ? "All parallels" : "Select a set first"}</option>
-          {parallelOptions.map((p) => (
-            <option key={p.id} value={p.parallel_name}>
-              {p.parallel_name}
-              {p.sku_exclusivity ? ` (${p.sku_exclusivity})` : ""}
-            </option>
-          ))}
-        </Select>
-      </div>
+      <FilterSelectRow
+        team={team}
+        onTeamChange={(value) => updateParams({ team: value })}
+        teamOptions={teamSelectOptions}
+        setName={setName}
+        onSetChange={(value) => updateParams({ set: value, insertSet: "", parallel: "" })}
+        setOptions={setSelectOptions}
+        insertSet={insertSet}
+        onInsertSetChange={(value) => updateParams({ insertSet: value })}
+        insertSetOptions={insertSetSelectOptions}
+        parallel={parallel}
+        onParallelChange={(value) => updateParams({ parallel: value })}
+        parallelOptions={parallelSelectOptions}
+      />
 
       {tab === "for_trade" && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
