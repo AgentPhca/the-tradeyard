@@ -18,11 +18,15 @@ export function MarketplaceFilters() {
   const searchParams = useSearchParams();
   const supabase = createClient();
 
+  const tab = searchParams.get("tab") === "looking" ? "looking" : "for_trade";
   const team = searchParams.get("team") ?? "";
   const setName = searchParams.get("set") ?? "";
   const insertSet = searchParams.get("insertSet") ?? "";
   const parallel = searchParams.get("parallel") ?? "";
-  const status = searchParams.get("status") === "personal_collection" ? "personal_collection" : "for_trade";
+  const isRookie = searchParams.get("rookie") === "true";
+  const isAutograph = searchParams.get("autograph") === "true";
+  const isRelic = searchParams.get("relic") === "true";
+  const isNumbered = searchParams.get("numbered") === "true";
 
   const [playerName, setPlayerName] = useState(searchParams.get("player") ?? "");
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
@@ -94,11 +98,15 @@ export function MarketplaceFilters() {
           className="pl-9"
           value={playerName}
           onChange={(e) => setPlayerName(e.target.value)}
-          placeholder="Search by player name..."
+          placeholder={
+            tab === "for_trade"
+              ? "Search by player, team, set, or card number..."
+              : "Search by player, team, or set..."
+          }
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <Select value={team} onChange={(e) => updateParams({ team: e.target.value })}>
           <option value="">All teams</option>
           {NFL_TEAMS.map((t) => (
@@ -146,12 +154,48 @@ export function MarketplaceFilters() {
             </option>
           ))}
         </Select>
-
-        <Select value={status} onChange={(e) => updateParams({ status: e.target.value })}>
-          <option value="for_trade">For Trade</option>
-          <option value="personal_collection">Personal Collection</option>
-        </Select>
       </div>
+
+      {tab === "for_trade" && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isRookie}
+              onChange={(e) => updateParams({ rookie: e.target.checked ? "true" : "" })}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Rookie
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isAutograph}
+              onChange={(e) => updateParams({ autograph: e.target.checked ? "true" : "" })}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Autograph
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isRelic}
+              onChange={(e) => updateParams({ relic: e.target.checked ? "true" : "" })}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Patch
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isNumbered}
+              onChange={(e) => updateParams({ numbered: e.target.checked ? "true" : "" })}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Numbered
+          </label>
+        </div>
+      )}
     </div>
   );
 }

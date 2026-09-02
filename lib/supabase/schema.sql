@@ -104,6 +104,7 @@ create table public.cards (
   set_name text,
   insert_set text,
   is_variation_of_base boolean not null default false,
+  is_rookie boolean not null default false,
   parallel text,
   serial_number text,
   print_run integer,

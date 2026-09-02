@@ -26,6 +26,7 @@ export type Card = {
   set_name: string | null;
   insert_set: string | null;
   is_variation_of_base: boolean;
+  is_rookie: boolean;
   parallel: string | null;
   serial_number: string | null;
   print_run: number | null;

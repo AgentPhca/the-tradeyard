@@ -12,6 +12,7 @@ import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { CARD_SETS, CONDITIONS } from "@/lib/data/cardCatalog";
 import { useParallelsForSet } from "@/lib/hooks/useParallelsForSet";
 import { parallelLabel, titleCase } from "@/lib/utils/text";
+import { buildTokenOrFilters, tokenizeSearch } from "@/lib/utils/search";
 import type {
   Card,
   CardCatalogEntry,
@@ -30,6 +31,7 @@ type CatalogMatch = Pick<
   | "category"
   | "insert_set"
   | "is_variation_of_base"
+  | "is_rookie"
   | "is_autograph"
   | "is_relic"
 >;
@@ -98,15 +100,6 @@ const CATALOG_SEARCH_COLUMNS = [
   "card_number",
 ] as const;
 
-// PostgREST's `.or()` filter string uses "," to separate conditions and
-// "()" to group them, so a token containing those would otherwise corrupt
-// the filter instead of just failing to match anything. Strip them —
-// none of player_name/team/set_name/insert_set legitimately contain
-// commas or parens, so this never drops a token a user actually meant.
-function sanitizeSearchToken(token: string): string {
-  return token.replace(/[,()]/g, "");
-}
-
 interface CardFormProps {
   mode: "create" | "edit";
   card?: Card;
@@ -128,6 +121,7 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [serialNumber, setSerialNumber] = useState(card?.serial_number ?? "");
   const [printRun, setPrintRun] = useState(card?.print_run != null ? String(card.print_run) : "");
   const [condition, setCondition] = useState(card?.condition ?? "");
+  const [isRookie, setIsRookie] = useState(card?.is_rookie ?? false);
   const [isAutograph, setIsAutograph] = useState(card?.is_autograph ?? false);
   const [isRelic, setIsRelic] = useState(card?.is_relic ?? false);
   const [status, setStatus] = useState<CardStatus>(card?.status ?? "personal_collection");
@@ -168,7 +162,7 @@ export function CardForm({ mode, card }: CardFormProps) {
       suppressLookup.current = false;
       return;
     }
-    const tokens = playerName.trim().split(/\s+/).map(sanitizeSearchToken).filter(Boolean);
+    const tokens = tokenizeSearch(playerName);
     if (playerName.trim().length < 3 || tokens.length === 0) {
       setCatalogMatches([]);
       return;
@@ -178,13 +172,11 @@ export function CardForm({ mode, card }: CardFormProps) {
       let query = supabase
         .from("card_catalog")
         .select(
-          "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_autograph, is_relic"
+          "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_rookie, is_autograph, is_relic"
         );
 
-      for (const token of tokens) {
-        query = query.or(
-          CATALOG_SEARCH_COLUMNS.map((column) => `${column}.ilike.%${token}%`).join(",")
-        );
+      for (const filter of buildTokenOrFilters(tokens, CATALOG_SEARCH_COLUMNS)) {
+        query = query.or(filter);
       }
 
       const { data } = await query
@@ -240,6 +232,7 @@ export function CardForm({ mode, card }: CardFormProps) {
       return;
     }
     setInsertSet("");
+    setIsRookie(false);
     setIsAutograph(false);
     setIsRelic(false);
     setIsVariationOfBase(false);
@@ -300,6 +293,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     setCardNumber(match.card_number ?? "");
     setSetName(match.set_name);
     setInsertSet(match.insert_set ?? "");
+    setIsRookie(match.is_rookie);
     setIsAutograph(match.is_autograph);
     setIsRelic(match.is_relic);
     setIsVariationOfBase(match.is_variation_of_base);
@@ -402,6 +396,7 @@ export function CardForm({ mode, card }: CardFormProps) {
       set_name: setName || null,
       insert_set: insertSet || null,
       is_variation_of_base: isVariationOfBase,
+      is_rookie: isRookie,
       parallel: parallel || null,
       serial_number: serialNumber || null,
       print_run: printRun ? Number(printRun) : null,
@@ -593,6 +588,15 @@ export function CardForm({ mode, card }: CardFormProps) {
         </div>
 
         <div className="flex items-center gap-6">
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={isRookie}
+              onChange={(e) => setIsRookie(e.target.checked)}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Rookie
+          </label>
           <label className="flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
