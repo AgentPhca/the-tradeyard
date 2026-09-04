@@ -103,9 +103,13 @@ const CATALOG_SEARCH_COLUMNS = [
 interface CardFormProps {
   mode: "create" | "edit";
   card?: Card;
+  // A card_catalog row id to prefill from on load (e.g. clicking an empty
+  // BaseYard sticker-album slot links here as ?catalogId=<row.id>). Reuses
+  // the exact same prefill path as picking a player-search result.
+  initialCatalogId?: string;
 }
 
-export function CardForm({ mode, card }: CardFormProps) {
+export function CardForm({ mode, card, initialCatalogId }: CardFormProps) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -149,6 +153,33 @@ export function CardForm({ mode, card }: CardFormProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoPreview]);
+
+  // Prefill from a specific card_catalog row on load (?catalogId= from the
+  // BaseYard sticker album's empty slots) — fetches that one row and feeds
+  // it through selectCatalogMatch(), the exact same path a player-search
+  // pick uses, so card_number/is_rookie/category/catalog_id all come from
+  // it consistently.
+  useEffect(() => {
+    if (!initialCatalogId || mode !== "create") return;
+
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await supabase
+        .from("card_catalog")
+        .select(
+          "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_rookie, is_autograph, is_relic"
+        )
+        .eq("id", initialCatalogId)
+        .maybeSingle();
+      if (!cancelled && data) selectCatalogMatch(data);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Look up the player against the real Topps checklist (card_catalog) as
   // the user types, so picking a match can auto-fill team + set instead of

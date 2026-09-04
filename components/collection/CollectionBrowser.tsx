@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Gem, Layers, PenTool, Sparkles } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
+import { StickerAlbum } from "@/components/collection/StickerAlbum";
 import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
@@ -237,34 +238,45 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
         </div>
       )}
 
-      <div className="mb-6 rounded-lg border border-border bg-surface p-4">
-        <FilterSelectRow
-          team={team}
-          onTeamChange={setTeam}
-          teamOptions={teamOptions}
-          setName={setName}
-          onSetChange={handleSetChange}
-          setOptions={setOptions}
-          insertSet={insertSet}
-          onInsertSetChange={setInsertSet}
-          insertSetOptions={insertSetOptions}
-          parallel={parallel}
-          onParallelChange={setParallel}
-          parallelOptions={parallelOptions}
-        />
-      </div>
-
-      {filteredCards.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
-          <Layers className="h-8 w-8 text-muted" />
-          <p className="mt-4 text-sm text-muted">No cards match this filter.</p>
-        </div>
+      {activeYard?.key === "base" ? (
+        // BaseYard is a full Set+Team checklist, not a filtered list of the
+        // user's own cards — the normal filter bar doesn't apply here
+        // (StickerAlbum has its own Set/Team pickers), and it needs every
+        // owned card, not just whatever the filter bar would have narrowed
+        // to.
+        <StickerAlbum cards={cards} />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {filteredCards.map((card) => (
-            <TradingCard key={card.id} card={card} isOwner />
-          ))}
-        </div>
+        <>
+          <div className="mb-6 rounded-lg border border-border bg-surface p-4">
+            <FilterSelectRow
+              team={team}
+              onTeamChange={setTeam}
+              teamOptions={teamOptions}
+              setName={setName}
+              onSetChange={handleSetChange}
+              setOptions={setOptions}
+              insertSet={insertSet}
+              onInsertSetChange={setInsertSet}
+              insertSetOptions={insertSetOptions}
+              parallel={parallel}
+              onParallelChange={setParallel}
+              parallelOptions={parallelOptions}
+            />
+          </div>
+
+          {filteredCards.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
+              <Layers className="h-8 w-8 text-muted" />
+              <p className="mt-4 text-sm text-muted">No cards match this filter.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {filteredCards.map((card) => (
+                <TradingCard key={card.id} card={card} isOwner />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
