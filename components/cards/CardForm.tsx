@@ -125,6 +125,11 @@ export function CardForm({ mode, card }: CardFormProps) {
   const [isAutograph, setIsAutograph] = useState(card?.is_autograph ?? false);
   const [isRelic, setIsRelic] = useState(card?.is_relic ?? false);
   const [category, setCategory] = useState<string | null>(card?.category ?? null);
+  // The exact card_catalog row this card was created from — set only when
+  // the user picks a player-search result (selectCatalogMatch), never
+  // guessed at afterwards. Stays null for the "Other"/free-text path or a
+  // search with no match, same as category/is_rookie in that case.
+  const [catalogId, setCatalogId] = useState<string | null>(card?.catalog_id ?? null);
   const [status, setStatus] = useState<CardStatus>(card?.status ?? "personal_collection");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(card?.image_url ?? null);
@@ -238,6 +243,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsRelic(false);
     setIsVariationOfBase(false);
     setCategory(null);
+    setCatalogId(null);
     setParallel("");
     setTier("");
     setBaseType("");
@@ -300,6 +306,7 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsRelic(match.is_relic);
     setIsVariationOfBase(match.is_variation_of_base);
     setCategory(match.category);
+    setCatalogId(match.id);
     setShowMatches(false);
     setCatalogMatches([]);
   }
@@ -311,6 +318,10 @@ export function CardForm({ mode, card }: CardFormProps) {
     setIsRelic(option?.is_relic ?? false);
     setIsVariationOfBase(option?.is_variation_of_base ?? false);
     setCategory(option?.category ?? null);
+    // card_catalog_insert_sets is a set-level aggregate view, not one
+    // specific card_catalog row, so a manual Insert Set pick can no longer
+    // claim to be backed by an exact catalog_id.
+    setCatalogId(null);
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -408,6 +419,7 @@ export function CardForm({ mode, card }: CardFormProps) {
       is_autograph: isAutograph,
       is_relic: isRelic,
       category,
+      catalog_id: catalogId,
       status,
       image_url: imageUrl,
       traded_at: tradedAt,

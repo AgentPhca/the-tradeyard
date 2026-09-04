@@ -119,6 +119,14 @@ create table public.cards (
   is_autograph boolean not null default false,
   is_relic boolean not null default false,
   category text,
+  -- The exact card_catalog row this card was created from, when the user
+  -- picked one from the player search (see CardForm.tsx). No FK constraint
+  -- here — card_catalog is created by a separate file (card_catalog.sql)
+  -- that this README's setup instructions run AFTER schema.sql, so the
+  -- referenced table doesn't exist yet at this point on a fresh install.
+  -- add_catalog_id_to_cards.sql adds the FK constraint for existing
+  -- databases, where card_catalog already exists.
+  catalog_id uuid,
   status public.card_status not null default 'personal_collection',
   image_url text,
   notes text,
