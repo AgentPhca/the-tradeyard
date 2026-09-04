@@ -47,6 +47,16 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
   // Fetched once — every Base-category catalog row, across all sets. A few
   // thousand rows at most, and it's a one-time load rather than a query per
   // Set/Team click, which keeps switching between sets/teams instant.
+  //
+  // is_variation_of_base = false excludes photo-variation rows (e.g. "TEAM
+  // CAMO VARIATION", "LIGHTBOARD LOGO VARIATION") that the checklist import
+  // also tagged category='Base' — without this, the same player/card_number
+  // shows up 2-3x (once per variation) instead of once per real checklist
+  // slot. The explicit .limit(10000) matters just as much: Base rows alone
+  // total ~3,400 across all sets, well past PostgREST's default 1000-row
+  // cap, so without it the query silently truncated (ordered by set_name)
+  // and several sets never made it into `rows` at all — that's why the Set
+  // dropdown was missing sets, not because it was reading from `cards`.
   useEffect(() => {
     let cancelled = false;
 
@@ -55,10 +65,12 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
         .from("card_catalog")
         .select("id, set_name, team, player_name, card_number, is_rookie")
         .eq("category", "Base")
+        .eq("is_variation_of_base", false)
         .order("set_name")
         .order("team")
         .order("player_name")
-        .order("card_number");
+        .order("card_number")
+        .limit(10000);
       if (!cancelled) {
         setRows(data ?? []);
         setLoading(false);
@@ -121,17 +133,33 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
     [rowsInSet, team]
   );
 
-  const ownedCardByCatalogId = useMemo(() => {
+  // A catalog row counts as owned when the user has a card flagged
+  // category='Base' whose player/team/set matches — not just cards linked
+  // via catalog_id. This also picks up cards that were manually flagged
+  // "Base Set" with no catalog match at all (no catalog_id), which
+  // catalog_id-only matching would otherwise miss entirely.
+  function ownershipKey(playerName: string, team: string | null, set: string) {
+    return `${playerName}|${team ?? ""}|${set}`;
+  }
+
+  const ownedByKey = useMemo(() => {
     const map = new Map<string, Card>();
     for (const c of cards) {
-      if (c.catalog_id) map.set(c.catalog_id, c);
+      if (c.category !== "Base" || !c.set_name) continue;
+      const key = ownershipKey(c.player_name, c.team, c.set_name);
+      if (!map.has(key)) map.set(key, c);
     }
     return map;
   }, [cards]);
 
+  function findOwnedCard(row: BaseCatalogRow) {
+    return ownedByKey.get(ownershipKey(row.player_name, row.team, row.set_name));
+  }
+
   const ownedCount = useMemo(
-    () => checklist.filter((row) => ownedCardByCatalogId.has(row.id)).length,
-    [checklist, ownedCardByCatalogId]
+    () => checklist.filter((row) => findOwnedCard(row)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [checklist, ownedByKey]
   );
   const progressPct = checklist.length > 0 ? Math.round((ownedCount / checklist.length) * 100) : 0;
 
@@ -201,7 +229,7 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
 
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
             {checklist.map((row) => {
-              const ownedCard = ownedCardByCatalogId.get(row.id);
+              const ownedCard = findOwnedCard(row);
 
               if (ownedCard) {
                 return (
