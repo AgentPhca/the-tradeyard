@@ -5,13 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { createClient } from "@/lib/supabase/client";
+import { ROLE_LABEL, SELECTABLE_ROLES } from "@/lib/utils/roles";
 import type { UserRole } from "@/lib/types/database";
-
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: "collector", label: "Collector" },
-  { value: "retailer", label: "Retailer" },
-  { value: "streamer", label: "Streamer" },
-];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -109,9 +104,9 @@ export default function RegisterPage() {
             onChange={(e) => setRole(e.target.value as UserRole)}
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
-            {ROLES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
+            {SELECTABLE_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABEL[r]}
               </option>
             ))}
           </select>

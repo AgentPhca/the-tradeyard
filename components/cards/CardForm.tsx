@@ -354,7 +354,7 @@ export function CardForm({ mode, card }: CardFormProps) {
         const { error: profileError } = await supabase.from("profiles").insert({
           id: user.id,
           username: (user.user_metadata?.username as string | undefined) || fallbackUsername,
-          role: (user.user_metadata?.role as UserRole | undefined) || "collector",
+          role: [(user.user_metadata?.role as UserRole | undefined) || "collector"],
         });
 
         if (profileError) {

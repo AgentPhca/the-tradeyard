@@ -60,11 +60,11 @@ export default async function CommunityPage({
     memberIds = (data ?? []).map((row) => row.followee_id);
   }
 
-  let members: { id: string; username: string; avatar_url: string | null; role: string }[] = [];
+  let members: { id: string; username: string; avatar_url: string | null }[] = [];
   if (memberIds.length > 0) {
     const { data } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, role")
+      .select("id, username, avatar_url")
       .in("id", memberIds);
     const byId = new Map((data ?? []).map((m) => [m.id, m]));
     members = memberIds.map((id) => byId.get(id)).filter((m): m is NonNullable<typeof m> => Boolean(m));

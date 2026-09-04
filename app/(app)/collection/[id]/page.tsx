@@ -3,17 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ImageOff, PenLine, Shirt } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
 import { BackButton } from "@/components/collection/BackButton";
 import { CardDetailActions } from "@/components/collection/CardDetailActions";
+import { RoleBadges } from "@/components/profile/RoleBadges";
 import { createClient } from "@/lib/supabase/server";
 import { titleCase } from "@/lib/utils/text";
-
-const ROLE_LABEL: Record<string, string> = {
-  collector: "Collector",
-  retailer: "Retailer",
-  streamer: "Streamer",
-};
 
 export default async function CardDetailPage({
   params,
@@ -154,7 +148,9 @@ export default async function CardDetailPage({
             <Avatar src={owner.avatar_url} alt={owner.username} size={40} />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-text">@{owner.username}</p>
-              <Badge className="mt-1">{ROLE_LABEL[owner.role] ?? owner.role}</Badge>
+              <div className="mt-1 flex flex-wrap gap-1">
+                <RoleBadges roles={owner.role} />
+              </div>
             </div>
           </Link>
 

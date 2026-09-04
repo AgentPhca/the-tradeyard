@@ -14,7 +14,10 @@ create extension if not exists "pgcrypto";
 -- ----------------------------------------------------------------------------
 -- Enums
 -- ----------------------------------------------------------------------------
-create type public.user_role as enum ('collector', 'retailer', 'streamer');
+-- 'owner'/'admin' are not user-selectable anywhere in the app (see
+-- ProfileForm.tsx's SELECTABLE_ROLES) — they're assigned manually via SQL
+-- only, for trusted/staff accounts.
+create type public.user_role as enum ('collector', 'retailer', 'streamer', 'owner', 'admin');
 create type public.card_status as enum ('personal_collection', 'for_trade', 'traded');
 create type public.trade_status as enum ('pending', 'accepted', 'completed', 'declined');
 
@@ -27,11 +30,15 @@ create table public.profiles (
   username text not null unique,
   full_name text,
   avatar_url text,
-  role public.user_role not null default 'collector',
+  -- A user can hold more than one role at once (e.g. Collector AND
+  -- Streamer), so this is an array rather than a single enum value.
+  role public.user_role[] not null default array['collector']::public.user_role[],
   bio text,
   twitch_url text,
   whatnot_url text,
   website_url text,
+  instagram_url text,
+  ebay_url text,
   allow_contact boolean not null default true,
   show_personal_collection boolean not null default false,
   created_at timestamptz not null default now()
@@ -63,7 +70,7 @@ begin
   values (
     new.id,
     coalesce(new.raw_user_meta_data ->> 'username', split_part(new.email, '@', 1)),
-    coalesce((new.raw_user_meta_data ->> 'role')::public.user_role, 'collector')
+    array[coalesce((new.raw_user_meta_data ->> 'role')::public.user_role, 'collector')]::public.user_role[]
   );
   return new;
 end;

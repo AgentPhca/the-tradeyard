@@ -20,7 +20,7 @@ select
     u.raw_user_meta_data ->> 'username',
     split_part(u.email, '@', 1) || '-' || substr(u.id::text, 1, 6)
   ),
-  coalesce((u.raw_user_meta_data ->> 'role')::public.user_role, 'collector')
+  array[coalesce((u.raw_user_meta_data ->> 'role')::public.user_role, 'collector')]::public.user_role[]
 from auth.users u
 left join public.profiles p on p.id = u.id
 where p.id is null;

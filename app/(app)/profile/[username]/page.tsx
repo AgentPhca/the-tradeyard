@@ -1,21 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Globe, Pencil, Plus, Radio, ShoppingBag } from "lucide-react";
+import { Camera, Globe, Pencil, Plus, Radio, ShoppingBag, Tag } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FollowButton } from "@/components/profile/FollowButton";
 import { RatingWidget } from "@/components/profile/RatingWidget";
+import { RoleBadges } from "@/components/profile/RoleBadges";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/server";
 import type { Card, Wishlist } from "@/lib/types/database";
-
-const ROLE_LABEL: Record<string, string> = {
-  collector: "Collector",
-  retailer: "Retailer",
-  streamer: "Streamer",
-};
 
 const TABS = [
   { key: "collection", label: "My Collection" },
@@ -141,6 +135,8 @@ export default async function ProfilePage({
   const socialLinks = [
     { url: profile.twitch_url, label: "Twitch", icon: Radio },
     { url: profile.whatnot_url, label: "Whatnot", icon: ShoppingBag },
+    { url: profile.instagram_url, label: "Instagram", icon: Camera },
+    { url: profile.ebay_url, label: "eBay", icon: Tag },
     { url: profile.website_url, label: "Website", icon: Globe },
   ].filter((link) => link.url);
 
@@ -151,7 +147,7 @@ export default async function ProfilePage({
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-bold text-text">{profile.full_name || profile.username}</h1>
-            <Badge>{ROLE_LABEL[profile.role] ?? profile.role}</Badge>
+            <RoleBadges roles={profile.role} />
           </div>
           <p className="text-sm text-muted">@{profile.username}</p>
           <p className="mt-0.5 text-xs text-muted">Member since {memberSince}</p>

@@ -7,13 +7,8 @@ import { LogOut, Pencil, User, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Switch } from "@/components/ui/Switch";
 import { createClient } from "@/lib/supabase/client";
+import { ROLE_LABEL } from "@/lib/utils/roles";
 import type { Profile } from "@/lib/types/database";
-
-const ROLE_LABEL: Record<string, string> = {
-  collector: "Collector",
-  retailer: "Retailer",
-  streamer: "Streamer",
-};
 
 interface ProfileMenuProps {
   profile: Pick<Profile, "username" | "avatar_url" | "role" | "allow_contact">;
@@ -107,7 +102,9 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
             <Avatar src={profile.avatar_url} alt={profile.username} size={40} />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-text">@{profile.username}</p>
-              <p className="text-xs text-muted">{ROLE_LABEL[profile.role] ?? profile.role}</p>
+              <p className="text-xs text-muted">
+                {profile.role.map((r) => ROLE_LABEL[r] ?? r).join(", ")}
+              </p>
             </div>
           </div>
 

@@ -1,4 +1,6 @@
-export type UserRole = "collector" | "retailer" | "streamer";
+// 'owner'/'admin' are assigned manually via SQL only — never selectable in
+// the app's own UI (see lib/utils/roles.ts's SELECTABLE_ROLES).
+export type UserRole = "collector" | "retailer" | "streamer" | "owner" | "admin";
 export type CardStatus = "personal_collection" | "for_trade" | "traded";
 export type TradeStatus = "pending" | "accepted" | "completed" | "declined";
 
@@ -7,11 +9,15 @@ export type Profile = {
   username: string;
   full_name: string | null;
   avatar_url: string | null;
-  role: UserRole;
+  // A user can hold more than one role at once (e.g. Collector AND
+  // Streamer) — see lib/supabase/convert_profiles_role_to_array.sql.
+  role: UserRole[];
   bio: string | null;
   twitch_url: string | null;
   whatnot_url: string | null;
   website_url: string | null;
+  instagram_url: string | null;
+  ebay_url: string | null;
   allow_contact: boolean;
   show_personal_collection: boolean;
   created_at: string;
