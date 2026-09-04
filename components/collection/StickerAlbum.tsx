@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, ImageOff, Lock } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ImageOff, Lock } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
+import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
 import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
 type BaseCatalogRow = Pick<
@@ -21,10 +22,8 @@ const lockedPatternStyle = {
     "repeating-linear-gradient(45deg, rgba(139,148,158,0.08) 0px, rgba(139,148,158,0.08) 6px, transparent 6px, transparent 12px)",
 };
 
-const chipBaseClass =
-  "shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors";
-const chipInactiveClass = "border-border bg-surface text-muted hover:border-primary/40 hover:text-text";
-const chipActiveClass = "border-primary/30 bg-primary/10 text-primary";
+const tileInactiveClass = "border-border bg-surface text-muted hover:border-primary/40 hover:text-text";
+const tileSelectedClass = "border-primary/30 bg-primary/10 text-primary";
 
 interface StickerAlbumProps {
   cards: Card[];
@@ -42,6 +41,7 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
   const [loading, setLoading] = useState(true);
   const [setName, setSetName] = useState("");
   const [team, setTeam] = useState("");
+  const [activeDivision, setActiveDivision] = useState<string | null>(null);
   const [defaultSetPicked, setDefaultSetPicked] = useState(false);
 
   // Fetched once — every Base-category catalog row, across all sets. A few
@@ -115,18 +115,25 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
     setTeam("");
   }
 
+  // Single-open accordion: clicking the already-active division collapses
+  // it (the team it had selected, if any, is left as-is — collapsing is
+  // just tidying up the picker, not undoing the pick). Clicking a
+  // different division opens it and clears the team selection, since
+  // "no team chosen yet" is exactly the state right after a division
+  // switch.
+  function handleDivisionClick(divisionName: string) {
+    if (activeDivision === divisionName) {
+      setActiveDivision(null);
+    } else {
+      setActiveDivision(divisionName);
+      setTeam("");
+    }
+  }
+
   const rowsInSet = useMemo(
     () => rows.filter((row) => row.set_name === setName),
     [rows, setName]
   );
-
-  const teamOptions = useMemo(() => {
-    const seen = new Set<string>();
-    for (const row of rowsInSet) {
-      if (row.team) seen.add(row.team);
-    }
-    return Array.from(seen).sort((a, b) => a.localeCompare(b));
-  }, [rowsInSet]);
 
   const checklist = useMemo(
     () => (team ? rowsInSet.filter((row) => row.team === team) : []),
@@ -190,26 +197,55 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
         </Select>
       </div>
 
-      {teamOptions.length > 0 && (
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {teamOptions.map((t) => {
-            const active = team === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTeam(active ? "" : t)}
-                className={`${chipBaseClass} ${active ? chipActiveClass : chipInactiveClass}`}
-              >
-                {t}
-              </button>
-            );
-          })}
+      <div className="mb-2 grid grid-cols-4 gap-2">
+        {NFL_DIVISIONS.map((division) => {
+          const active = activeDivision === division.name;
+          return (
+            <button
+              key={division.name}
+              type="button"
+              onClick={() => handleDivisionClick(division.name)}
+              className={`flex items-center justify-between gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
+                active
+                  ? "border-primary bg-[#14532D] text-primary"
+                  : "border-border bg-surface text-muted hover:border-primary/40 hover:text-text"
+              }`}
+            >
+              <span className="truncate">{division.name}</span>
+              {active ? (
+                <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeDivision && (
+        <div className="mb-4 rounded-lg border border-primary/40 bg-[#0F1520] p-3">
+          <div className="grid grid-cols-4 gap-2">
+            {NFL_DIVISIONS.find((d) => d.name === activeDivision)?.teams.map((t) => {
+              const selected = team === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTeam(selected ? "" : t)}
+                  className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
+                    selected ? tileSelectedClass : tileInactiveClass
+                  }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {!team ? (
-        <p className="text-sm text-muted">Pick a team to see its checklist.</p>
+        <p className="text-sm text-muted">Select a team above to see its checklist.</p>
       ) : (
         <>
           <div className="mb-4">
