@@ -604,7 +604,7 @@ export function CardForm({ mode, card }: CardFormProps) {
           </Select>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-6">
           <label className="flex items-center gap-2 text-sm text-text">
             <input
               type="checkbox"
@@ -631,6 +631,15 @@ export function CardForm({ mode, card }: CardFormProps) {
               className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
             />
             Relic / patch
+          </label>
+          <label className="flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={category === "Base"}
+              onChange={(e) => setCategory(e.target.checked ? "Base" : null)}
+              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
+            />
+            Base Set
           </label>
         </div>
 
