@@ -11,8 +11,32 @@ import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
 type BaseCatalogRow = Pick<
   CardCatalogEntry,
-  "id" | "set_name" | "team" | "player_name" | "card_number" | "is_rookie"
+  | "id"
+  | "set_name"
+  | "team"
+  | "player_name"
+  | "card_number"
+  | "is_rookie"
+  | "insert_set"
+  | "class_segment"
 >;
+
+// A row's "tier" for display, e.g. Finest's Common/Uncommon/Rare or
+// Signature Class's Rookie Class/Veterans Class — there isn't one single
+// column that carries this for every set. Signature Class Football puts it
+// cleanly in class_segment ("Rookie Class"/"Veterans Class"); Finest has no
+// class_segment at all and instead encodes it as a suffix on insert_set
+// ("BASE CARDS COMMON"/"BASE CARDS UNCOMMON"/"BASE CARDS RARE" — verified
+// against the real checklist import data). Sets with neither just show no
+// badge, which is the expected/correct fallback.
+function tierLabel(row: BaseCatalogRow): string | null {
+  if (row.class_segment) return row.class_segment;
+  const insertSet = row.insert_set?.toUpperCase() ?? "";
+  if (insertSet.endsWith("RARE")) return "Rare";
+  if (insertSet.endsWith("UNCOMMON")) return "Uncommon";
+  if (insertSet.endsWith("COMMON")) return "Common";
+  return null;
+}
 
 // A subtle diagonal hatch, built from the muted token (#8B949E) rather than
 // a flat fill, so a locked slot reads as "not yet collected" without
@@ -52,27 +76,46 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
   // CAMO VARIATION", "LIGHTBOARD LOGO VARIATION") that the checklist import
   // also tagged category='Base' — without this, the same player/card_number
   // shows up 2-3x (once per variation) instead of once per real checklist
-  // slot. The explicit .limit(10000) matters just as much: Base rows alone
-  // total ~3,400 across all sets, well past PostgREST's default 1000-row
-  // cap, so without it the query silently truncated (ordered by set_name)
-  // and several sets never made it into `rows` at all — that's why the Set
-  // dropdown was missing sets, not because it was reading from `cards`.
+  // slot.
+  //
+  // Explicitly paginated with .range() rather than one .limit(10000) call —
+  // a single request was still silently getting cut off well under 10000
+  // (confirmed by counting the real import data: Chrome Black+Chrome+Cosmic
+  // Chrome+Finest together total ~1,846 Base rows and were the only ones
+  // showing up; Resurgence+Signature Class+Flagship, everything after that
+  // in set_name order, were missing entirely — a client-side .limit() can't
+  // raise a cap the server itself is enforcing, e.g. PostgREST's db-max-rows
+  // project setting). Paging in chunks of 1000 sidesteps whatever that cap
+  // actually is, since no single request asks for more than that.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const { data } = await supabase
-        .from("card_catalog")
-        .select("id, set_name, team, player_name, card_number, is_rookie")
-        .eq("category", "Base")
-        .eq("is_variation_of_base", false)
-        .order("set_name")
-        .order("team")
-        .order("player_name")
-        .order("card_number")
-        .limit(10000);
+      const pageSize = 1000;
+      const allRows: BaseCatalogRow[] = [];
+      let from = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { data } = await supabase
+          .from("card_catalog")
+          .select("id, set_name, team, player_name, card_number, is_rookie, insert_set, class_segment")
+          .eq("category", "Base")
+          .eq("is_variation_of_base", false)
+          .order("set_name")
+          .order("team")
+          .order("player_name")
+          .order("card_number")
+          .range(from, from + pageSize - 1);
+
+        const page = data ?? [];
+        allRows.push(...page);
+        if (cancelled || page.length < pageSize) break;
+        from += pageSize;
+      }
+
       if (!cancelled) {
-        setRows(data ?? []);
+        setRows(allRows);
         setLoading(false);
       }
     })();
@@ -266,6 +309,7 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
             {checklist.map((row) => {
               const ownedCard = findOwnedCard(row);
+              const tier = tierLabel(row);
 
               if (ownedCard) {
                 return (
@@ -292,9 +336,19 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
                         <Check className="h-3 w-3" />
                       </span>
                     </div>
-                    <p className="truncate px-2 py-1.5 text-xs font-medium text-text">
-                      {row.player_name}
-                    </p>
+                    <div className="px-2 py-1.5">
+                      <p className="truncate text-xs font-medium text-text">{row.player_name}</p>
+                      <div className="mt-0.5 flex items-center gap-1">
+                        {row.card_number && (
+                          <span className="text-[10px] text-muted">#{row.card_number}</span>
+                        )}
+                        {tier && (
+                          <span className="inline-flex items-center truncate rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+                            {tier}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </Link>
                 );
               }
@@ -311,7 +365,19 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
                   >
                     <Lock className="h-5 w-5 text-muted" />
                   </div>
-                  <p className="truncate px-2 py-1.5 text-xs text-muted">{row.player_name}</p>
+                  <div className="px-2 py-1.5">
+                    <p className="truncate text-xs text-muted">{row.player_name}</p>
+                    <div className="mt-0.5 flex items-center gap-1">
+                      {row.card_number && (
+                        <span className="text-[10px] text-muted">#{row.card_number}</span>
+                      )}
+                      {tier && (
+                        <span className="inline-flex items-center truncate rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+                          {tier}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </Link>
               );
             })}
