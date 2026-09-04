@@ -107,9 +107,13 @@ interface CardFormProps {
   // BaseYard sticker-album slot links here as ?catalogId=<row.id>). Reuses
   // the exact same prefill path as picking a player-search result.
   initialCatalogId?: string;
+  // Where to navigate after a successful save. Defaults to /collection —
+  // Add Card passes the BaseYard Set+Team the user came from (if any) so
+  // saving doesn't strand them back on the generic collection view.
+  returnTo?: string;
 }
 
-export function CardForm({ mode, card, initialCatalogId }: CardFormProps) {
+export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormProps) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -467,7 +471,7 @@ export function CardForm({ mode, card, initialCatalogId }: CardFormProps) {
       return;
     }
 
-    router.push("/collection");
+    router.push(returnTo ?? "/collection");
     router.refresh();
   }
 

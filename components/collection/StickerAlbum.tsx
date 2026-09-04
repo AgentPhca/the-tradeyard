@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronDown, ChevronUp, ImageOff, Lock } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
@@ -61,12 +62,38 @@ interface StickerAlbumProps {
 // user actually has.
 export function StickerAlbum({ cards }: StickerAlbumProps) {
   const supabase = createClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Set/Team live in the URL (?baseSet=&baseTeam=) rather than being purely
+  // local state, so returning here — e.g. after saving a card added from an
+  // empty slot — lands back on the exact same checklist instead of
+  // resetting to the "best owned set" default.
+  const urlSet = searchParams.get("baseSet") ?? "";
+  const urlTeam = searchParams.get("baseTeam") ?? "";
+
   const [rows, setRows] = useState<BaseCatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [setName, setSetName] = useState("");
-  const [team, setTeam] = useState("");
-  const [activeDivision, setActiveDivision] = useState<string | null>(null);
-  const [defaultSetPicked, setDefaultSetPicked] = useState(false);
+  const [setName, setSetName] = useState(urlSet);
+  const [team, setTeam] = useState(urlTeam);
+  const [activeDivision, setActiveDivision] = useState<string | null>(() => {
+    if (!urlTeam) return null;
+    const division = NFL_DIVISIONS.find((d) => d.teams.some((t) => t === urlTeam));
+    return division?.name ?? null;
+  });
+  const [defaultSetPicked, setDefaultSetPicked] = useState(Boolean(urlSet));
+
+  function updateStickerParams(updates: Record<string, string>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, {
+      scroll: false,
+    });
+  }
 
   // Fetched once — every Base-category catalog row, across all sets. A few
   // thousand rows at most, and it's a one-time load rather than a query per
@@ -156,6 +183,8 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
   function handleSetChange(value: string) {
     setSetName(value);
     setTeam("");
+    setActiveDivision(null);
+    updateStickerParams({ baseSet: value, baseTeam: "" });
   }
 
   // Single-open accordion: clicking the already-active division collapses
@@ -170,7 +199,14 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
     } else {
       setActiveDivision(divisionName);
       setTeam("");
+      updateStickerParams({ baseTeam: "" });
     }
+  }
+
+  function handleTeamClick(t: string) {
+    const next = team === t ? "" : t;
+    setTeam(next);
+    updateStickerParams({ baseSet: setName, baseTeam: next });
   }
 
   const rowsInSet = useMemo(
@@ -274,7 +310,7 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setTeam(selected ? "" : t)}
+                  onClick={() => handleTeamClick(t)}
                   className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
                     selected ? tileSelectedClass : tileInactiveClass
                   }`}
@@ -356,7 +392,7 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
               return (
                 <Link
                   key={row.id}
-                  href={`/collection/add?catalogId=${row.id}`}
+                  href={`/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`}
                   className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
                 >
                   <div

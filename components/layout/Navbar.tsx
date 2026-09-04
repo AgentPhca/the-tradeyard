@@ -127,7 +127,7 @@ export function Navbar({
         </div>
       </div>
 
-      <nav className="flex items-center gap-1 overflow-x-auto border-t border-border px-4 py-2 sm:hidden">
+      <nav className="flex items-center gap-1 overflow-x-auto border-t border-border px-4 py-2 sm:hidden no-scrollbar">
         {NAV_LINKS.map(({ href, label, icon: Icon }) => {
           const active = pathname?.startsWith(href);
           return (

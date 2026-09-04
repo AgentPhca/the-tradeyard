@@ -6,10 +6,20 @@ import { ArrowLeft, Gem, Layers, PenTool, Sparkles } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
 import { StickerAlbum } from "@/components/collection/StickerAlbum";
+import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
 type YardKey = "rookie" | "base" | "auto" | "grail";
+
+type SortKey = "recent" | "player" | "cardNumber" | "team";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "recent", label: "Recently added" },
+  { value: "player", label: "Player name" },
+  { value: "cardNumber", label: "Card number" },
+  { value: "team", label: "Team" },
+];
 
 // SuperFractors/1-of-1s and other short print runs are what "grail" means
 // to a collector — any relic/patch card counts too, regardless of print
@@ -105,6 +115,7 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
   const [setName, setSetName] = useState("");
   const [insertSet, setInsertSet] = useState("");
   const [parallel, setParallel] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
 
   function handleSetChange(value: string) {
     setSetName(value);
@@ -170,6 +181,24 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
     return filterBarCards.filter(activeYard.test);
   }, [filterBarCards, activeYard]);
 
+  // "Recently added" needs no re-sort — cards already arrive from the
+  // server ordered by created_at desc, and filtering above preserves that
+  // order.
+  const sortedCards = useMemo(() => {
+    if (sort === "recent") return filteredCards;
+    const sorted = [...filteredCards];
+    if (sort === "player") {
+      sorted.sort((a, b) => a.player_name.localeCompare(b.player_name));
+    } else if (sort === "cardNumber") {
+      sorted.sort((a, b) =>
+        (a.card_number ?? "").localeCompare(b.card_number ?? "", undefined, { numeric: true })
+      );
+    } else if (sort === "team") {
+      sorted.sort((a, b) => (a.team ?? "").localeCompare(b.team ?? ""));
+    }
+    return sorted;
+  }, [filteredCards, sort]);
+
   if (cards.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
@@ -213,7 +242,7 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
           </button>
         </div>
       ) : (
-        <div className="mb-4 flex gap-3 overflow-x-auto pb-1">
+        <div className="mb-4 flex gap-3 overflow-x-auto pb-1 no-scrollbar">
           {YARDS.map((yard) => (
             <button
               key={yard.key}
@@ -264,6 +293,26 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
             />
           </div>
 
+          {filteredCards.length > 0 && (
+            <div className="mb-4 flex items-center justify-end gap-2">
+              <label htmlFor="collectionSort" className="text-sm text-muted">
+                Sort by
+              </label>
+              <Select
+                id="collectionSort"
+                className="w-auto"
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+              >
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
           {filteredCards.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
               <Layers className="h-8 w-8 text-muted" />
@@ -271,7 +320,7 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {filteredCards.map((card) => (
+              {sortedCards.map((card) => (
                 <TradingCard key={card.id} card={card} isOwner />
               ))}
             </div>

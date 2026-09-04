@@ -208,7 +208,7 @@ export default async function ProfilePage({
       </div>
 
       <div className="mt-8">
-        <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+        <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border no-scrollbar">
           {TABS.map((t) => (
             <Link
               key={t.key}

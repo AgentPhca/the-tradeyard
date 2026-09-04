@@ -25,6 +25,20 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Hides the native scrollbar on a horizontally-swipeable strip (tab
+     bars, the Yards hub row) without disabling scrolling itself — mobile
+     browsers otherwise flash a scrollbar track mid-swipe, which looks
+     like a rendering glitch on what's meant to read as a swipeable card
+     row, not a scrollable panel. */
+  .no-scrollbar {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* old Edge/IE */
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/newer Edge */
+  }
 }
 
 @layer components {

@@ -84,7 +84,7 @@ export default async function CommunityPage({
       <h1 className="text-2xl font-bold text-text">Community</h1>
       <p className="mt-1 text-sm text-muted">@{username}&rsquo;s network on the Yard.</p>
 
-      <div className="mt-6 flex gap-1 overflow-x-auto border-b border-border">
+      <div className="mt-6 flex gap-1 overflow-x-auto border-b border-border no-scrollbar">
         {TABS.map((t) => (
           <Link
             key={t.key}

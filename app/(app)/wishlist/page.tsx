@@ -87,7 +87,7 @@ export default async function WishlistPage({
         </p>
       </div>
 
-      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+      <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border no-scrollbar">
         {TABS.map((t) => (
           <Link
             key={t.key}
