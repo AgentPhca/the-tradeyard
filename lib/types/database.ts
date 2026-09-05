@@ -21,6 +21,7 @@ export type Profile = {
   allow_contact: boolean;
   show_personal_collection: boolean;
   show_baseyard_publicly: boolean;
+  show_insertyard_publicly: boolean;
   created_at: string;
 };
 

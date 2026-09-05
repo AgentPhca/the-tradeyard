@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { Switch } from "@/components/ui/Switch";
 import type { Profile } from "@/lib/types/database";
 
-type VisibilityField = "show_personal_collection" | "show_baseyard_publicly";
+type VisibilityField =
+  | "show_personal_collection"
+  | "show_baseyard_publicly"
+  | "show_insertyard_publicly";
 
 interface VisibilityToggleProps {
   profileId: string;
@@ -23,6 +26,7 @@ interface VisibilityToggleProps {
 const DEFAULT_LABEL: Record<VisibilityField, string> = {
   show_personal_collection: "Personal Collection",
   show_baseyard_publicly: "BaseYard",
+  show_insertyard_publicly: "InsertYard",
 };
 
 // The one place that writes either visibility column. Every on-page toggle

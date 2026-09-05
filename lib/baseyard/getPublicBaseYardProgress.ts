@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database";
-import { ownershipKey } from "@/lib/utils/baseyard";
+import { ownershipKey } from "@/lib/utils/checklist";
 
 export interface BaseYardSetProgress {
   setName: string;
@@ -9,17 +9,17 @@ export interface BaseYardSetProgress {
 }
 
 // A compact, per-set summary for the public BaseYard profile section —
-// unlike the interactive checklist (StickerAlbum), this doesn't need the
+// unlike the interactive checklist (ChecklistAlbum), this doesn't need the
 // full per-team grid, just "X / Y collected" per set. Reuses the same
-// player+team+set ownership matching StickerAlbum uses, so the two never
+// player+team+set ownership matching ChecklistAlbum uses, so the two never
 // disagree on what counts as "owned".
 export async function getPublicBaseYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string
 ): Promise<BaseYardSetProgress[]> {
   // Every Base-category catalog slot, across all sets — paginated the same
-  // way StickerAlbum fetches it (see that file for why .range() chunking is
-  // required instead of a single large .limit()).
+  // way ChecklistAlbum fetches it (see that file for why .range() chunking
+  // is required instead of a single large .limit()).
   const pageSize = 1000;
   const catalogRows: { set_name: string; team: string | null; player_name: string }[] = [];
   let from = 0;

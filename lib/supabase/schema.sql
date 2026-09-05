@@ -47,6 +47,10 @@ create table public.profiles (
   -- collection private while still showing off BaseYard progress, or vice
   -- versa. See baseyard_public_visibility.sql.
   show_baseyard_publicly boolean not null default false,
+  -- Same idea as show_baseyard_publicly, for InsertYard (Insert Set
+  -- checklist progress). Independent of both other visibility flags.
+  -- See insertyard_public_visibility.sql.
+  show_insertyard_publicly boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -386,10 +390,12 @@ create policy "Users can delete their own profile"
 -- For-trade and traded cards are visible to everyone; a personal_collection
 -- card is only visible to its owner unless that owner has opted in via
 -- profiles.show_personal_collection — or, for Base-category cards
--- specifically, via profiles.show_baseyard_publicly (the public BaseYard
--- section on a profile needs to read a user's personal_collection Base
--- cards even when their general collection stays private).
-create policy "Cards are viewable respecting personal collection and baseyard privacy"
+-- specifically, via profiles.show_baseyard_publicly, or for Insert-Set
+-- cards specifically, via profiles.show_insertyard_publicly (the public
+-- Base/InsertYard sections on a profile need to read a user's
+-- personal_collection cards even when their general collection stays
+-- private).
+create policy "Cards are viewable respecting personal collection and yard privacy"
   on public.cards for select
   to authenticated
   using (
@@ -406,6 +412,15 @@ create policy "Cards are viewable respecting personal collection and baseyard pr
         select 1 from public.profiles p
         where p.id = cards.owner_id
           and p.show_baseyard_publicly = true
+      )
+    )
+    or (
+      insert_set is not null
+      and category is distinct from 'Base'
+      and exists (
+        select 1 from public.profiles p
+        where p.id = cards.owner_id
+          and p.show_insertyard_publicly = true
       )
     )
   );

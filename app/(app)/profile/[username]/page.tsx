@@ -8,17 +8,20 @@ import { RatingWidget } from "@/components/profile/RatingWidget";
 import { RoleBadges } from "@/components/profile/RoleBadges";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
-import { StickerAlbum } from "@/components/collection/StickerAlbum";
+import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicBaseYardProgress, type BaseYardSetProgress } from "@/lib/baseyard/getPublicBaseYardProgress";
+import { getPublicInsertYardProgress } from "@/lib/insertyard/getPublicInsertYardProgress";
 import type { Card, Wishlist } from "@/lib/types/database";
 
-// BaseYard is filtered out below unless the profile has opted in (see
-// show_baseyard_publicly) — parallel to "My Collection", not nested inside
-// it, since Base cards no longer show up in that tab at all.
+// BaseYard/InsertYard are filtered out below unless the profile has opted
+// in (see show_baseyard_publicly/show_insertyard_publicly) — parallel to
+// "My Collection", not nested inside it, since Base/Insert cards no longer
+// show up in that tab at all.
 const ALL_TABS = [
   { key: "collection", label: "My Collection" },
   { key: "baseyard", label: "BaseYard" },
+  { key: "insertyard", label: "InsertYard" },
   { key: "trade", label: "For Trade" },
   { key: "traded", label: "Traded" },
   { key: "looking", label: "Looking For" },
@@ -31,10 +34,15 @@ export default async function ProfilePage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ tab?: string; baseSet?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    baseSet?: string;
+    insertYardSet?: string;
+    insertYardInsert?: string;
+  }>;
 }) {
   const { username } = await params;
-  const { tab, baseSet } = await searchParams;
+  const { tab, baseSet, insertYardSet, insertYardInsert } = await searchParams;
 
   const supabase = await createClient();
 
@@ -54,14 +62,22 @@ export default async function ProfilePage({
 
   const isOwnProfile = user?.id === profile.id;
 
-  const TABS = ALL_TABS.filter((t) => t.key !== "baseyard" || profile.show_baseyard_publicly);
+  const TABS = ALL_TABS.filter((t) => {
+    if (t.key === "baseyard") return profile.show_baseyard_publicly;
+    if (t.key === "insertyard") return profile.show_insertyard_publicly;
+    return true;
+  });
   const activeTab: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : "collection";
 
   // The owner always drills into a set via the full interactive album on
   // /collection (their tiles link there, see below) — the embedded
   // read-only album on this page is only ever for a visitor looking at
-  // someone else's BaseYard.
+  // someone else's Base/InsertYard.
   const showBaseYardAlbum = activeTab === "baseyard" && !isOwnProfile && Boolean(baseSet);
+  const showInsertYardSetDetail =
+    activeTab === "insertyard" && !isOwnProfile && Boolean(insertYardSet) && !insertYardInsert;
+  const showInsertYardAlbum =
+    activeTab === "insertyard" && !isOwnProfile && Boolean(insertYardSet) && Boolean(insertYardInsert);
 
   const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
     supabase
@@ -125,6 +141,9 @@ export default async function ProfilePage({
   let lookingFor: Wishlist[] = [];
   let baseYardProgress: BaseYardSetProgress[] = [];
   let baseYardAlbumCards: Card[] = [];
+  let insertYardBySet: Awaited<ReturnType<typeof getPublicInsertYardProgress>>["bySet"] = [];
+  let insertYardByInsertSet: Awaited<ReturnType<typeof getPublicInsertYardProgress>>["byInsertSet"] = [];
+  let insertYardAlbumCards: Card[] = [];
 
   if (activeTab === "looking") {
     const { data } = await supabase
@@ -147,6 +166,23 @@ export default async function ProfilePage({
     baseYardAlbumCards = data ?? [];
   } else if (activeTab === "baseyard") {
     baseYardProgress = await getPublicBaseYardProgress(supabase, profile.id);
+  } else if (activeTab === "insertyard" && showInsertYardAlbum) {
+    // Covered by the cards RLS policy's InsertYard clause (see
+    // insertyard_public_visibility.sql).
+    const { data } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("owner_id", profile.id)
+      .not("insert_set", "is", null)
+      .or("category.is.null,category.neq.Base")
+      .neq("status", "traded");
+    insertYardAlbumCards = data ?? [];
+  } else if (activeTab === "insertyard") {
+    // Covers both the Set-level overview and (once a Set is picked) the
+    // Insert-Set-level tiles — one fetch, sliced two ways in the JSX below.
+    const progress = await getPublicInsertYardProgress(supabase, profile.id);
+    insertYardBySet = progress.bySet;
+    insertYardByInsertSet = progress.byInsertSet;
   } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
     const status =
       activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
@@ -155,14 +191,14 @@ export default async function ProfilePage({
       .select("*")
       .eq("owner_id", profile.id)
       .eq("status", status);
-    // Base cards are BaseYard's own thing (see the dedicated tab below) —
-    // "My Collection" no longer mixes them in, for owner and visitors alike.
-    // .neq("category", "Base") alone would also silently drop every card
-    // with category = null (NULL <> 'Base' is NULL, not true, in SQL's
-    // three-valued logic) — most non-catalog-matched cards — so null has
-    // to be let through explicitly.
+    // Base and Insert cards are BaseYard's/InsertYard's own thing (see the
+    // dedicated tabs) — "My Collection" no longer mixes them in, for owner
+    // and visitors alike. .neq("category", "Base") alone would also
+    // silently drop every card with category = null (NULL <> 'Base' is
+    // NULL, not true, in SQL's three-valued logic) — most non-catalog-
+    // matched cards — so null has to be let through explicitly.
     if (activeTab === "collection") {
-      query = query.or("category.is.null,category.neq.Base");
+      query = query.or("category.is.null,category.neq.Base").is("insert_set", null);
     }
     const { data } = await query.order(activeTab === "traded" ? "traded_at" : "created_at", {
       ascending: false,
@@ -297,7 +333,7 @@ export default async function ProfilePage({
               >
                 &larr; Back to BaseYard overview
               </Link>
-              <StickerAlbum cards={baseYardAlbumCards} targetUserId={profile.id} readOnly />
+              <ChecklistAlbum cards={baseYardAlbumCards} targetUserId={profile.id} readOnly mode="base" />
             </div>
           ) : baseYardProgress.length === 0 ? (
             <p className="text-sm text-muted">No Base checklist data available yet.</p>
@@ -329,6 +365,96 @@ export default async function ProfilePage({
                     </div>
                     <p className="mt-1.5 text-xs text-muted">
                       {set.owned} / {set.total} collected
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          )
+        ) : activeTab === "insertyard" ? (
+          showInsertYardAlbum ? (
+            <div>
+              <Link
+                href={`/profile/${profile.username}?tab=insertyard&insertYardSet=${encodeURIComponent(insertYardSet ?? "")}`}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text"
+              >
+                &larr; Back to insert sets
+              </Link>
+              <ChecklistAlbum cards={insertYardAlbumCards} targetUserId={profile.id} readOnly mode="insert" />
+            </div>
+          ) : showInsertYardSetDetail ? (
+            <div>
+              <Link
+                href={`/profile/${profile.username}?tab=insertyard`}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text"
+              >
+                &larr; Back to InsertYard overview
+              </Link>
+              {insertYardByInsertSet.filter((i) => i.setName === insertYardSet).length === 0 ? (
+                <p className="text-sm text-muted">No insert sets found for this set.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {insertYardByInsertSet
+                    .filter((i) => i.setName === insertYardSet)
+                    .map((insert) => {
+                      const pct = insert.total > 0 ? Math.round((insert.owned / insert.total) * 100) : 0;
+                      const href = `/profile/${profile.username}?tab=insertyard&insertYardSet=${encodeURIComponent(insert.setName)}&insertYardInsert=${encodeURIComponent(insert.insertSet)}`;
+                      return (
+                        <Link
+                          key={insert.insertSet}
+                          href={href}
+                          className="rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40"
+                        >
+                          <div className="mb-1.5 flex items-center justify-between text-sm">
+                            <span className="font-medium text-text">{insert.insertSet}</span>
+                            <span className="text-muted">{pct}%</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-card">
+                            <div
+                              className="h-full rounded-full bg-primary transition-[width]"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <p className="mt-1.5 text-xs text-muted">
+                            {insert.owned} / {insert.total} collected
+                          </p>
+                        </Link>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          ) : insertYardBySet.length === 0 ? (
+            <p className="text-sm text-muted">No Insert Set checklist data available yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {insertYardBySet.map((set) => {
+                const pct = set.total > 0 ? Math.round((set.owned / set.total) * 100) : 0;
+                // The owner drills straight into the full interactive album
+                // on /collection; a visitor drills into the Insert-Set
+                // tiles for that Set, right here.
+                const tileHref = isOwnProfile
+                  ? `/collection?yard=insert&insertYardSet=${encodeURIComponent(set.setName)}`
+                  : `/profile/${profile.username}?tab=insertyard&insertYardSet=${encodeURIComponent(set.setName)}`;
+                return (
+                  <Link
+                    key={set.setName}
+                    href={tileHref}
+                    className="rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40"
+                  >
+                    <div className="mb-1.5 flex items-center justify-between text-sm">
+                      <span className="font-medium text-text">{set.setName}</span>
+                      <span className="text-muted">{pct}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-card">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted">
+                      {set.owned} / {set.total} collected · {set.insertSetCount}{" "}
+                      {set.insertSetCount === 1 ? "insert set" : "insert sets"}
                     </p>
                   </Link>
                 );

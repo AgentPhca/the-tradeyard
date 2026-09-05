@@ -2,15 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Gem, Layers, PenTool, Sparkles } from "lucide-react";
+import { ArrowLeft, Gem, LayoutGrid, Layers, PenTool, Sparkles } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
-import { StickerAlbum } from "@/components/collection/StickerAlbum";
+import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
 import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
-type YardKey = "rookie" | "base" | "auto" | "grail";
+type YardKey = "rookie" | "base" | "insert" | "auto" | "grail";
 
 type SortKey = "recent" | "player" | "cardNumber" | "team";
 
@@ -34,6 +34,11 @@ interface Yard {
   test: (card: Card) => boolean;
   badgeClass: string;
   tileBorderClass: string;
+  // Checklist-style yards (BaseYard, InsertYard) show every card_catalog
+  // slot — owned or not — via ChecklistAlbum, unlike the simple filtered
+  // lists the other yards are. Drives the small "Sticker Album" tag on the
+  // hub tile so that distinction is visible before picking a yard.
+  isAlbum?: boolean;
 }
 
 const YARDS: Yard[] = [
@@ -58,6 +63,20 @@ const YARDS: Yard[] = [
     test: (c) => c.category === "Base",
     badgeClass: "bg-sky-500/10 text-sky-400",
     tileBorderClass: "border-border",
+    isAlbum: true,
+  },
+  {
+    key: "insert",
+    label: "InsertYard",
+    description: "Insert sets from the checklist",
+    icon: LayoutGrid,
+    // The plain base checklist rows are tagged insert_set='BASE CARDS' in
+    // the source data, so category (not insert_set alone) is what actually
+    // distinguishes "a real insert set" from "the base checklist".
+    test: (c) => c.insert_set != null && c.category !== "Base",
+    badgeClass: "bg-teal-500/10 text-teal-400",
+    tileBorderClass: "border-border",
+    isAlbum: true,
   },
   {
     key: "auto",
@@ -94,9 +113,10 @@ function uniqueOptions(values: (string | null)[], label: (value: string) => stri
 
 interface CollectionBrowserProps {
   cards: Card[];
-  // Passed through to StickerAlbum (BaseYard) — see its targetUserId prop.
-  // Empty when logged out, but cards is always [] in that case too (see the
-  // early return below), so StickerAlbum never actually mounts with it.
+  // Passed through to ChecklistAlbum (BaseYard/InsertYard) — see its
+  // targetUserId prop. Empty when logged out, but cards is always [] in
+  // that case too (see the early return below), so ChecklistAlbum never
+  // actually mounts with it.
   currentUserId: string;
 }
 
@@ -180,14 +200,17 @@ export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserPro
     return counts;
   }, [filterBarCards]);
 
-  // Base cards are BaseYard's own thing now (a checklist-completion game,
-  // not a "card in my collection" in the usual sense) — they only show up
-  // in the default grid's own dedicated yard, not mixed into the general
-  // list. RookieYard/AutoYard/GrailYard are unaffected: their test()
-  // functions don't look at category, so a card that happens to be both
-  // Base and e.g. a rookie still shows up there.
+  // Base and Insert cards are BaseYard's/InsertYard's own thing now
+  // (checklist-completion games, not a "card in my collection" in the usual
+  // sense) — they only show up in the default grid's own dedicated yard,
+  // not mixed into the general list. RookieYard/AutoYard/GrailYard are
+  // unaffected: their test() functions don't look at category/insert_set,
+  // so a card that happens to also be a rookie/autograph/grail still shows
+  // up there.
   const filteredCards = useMemo(() => {
-    if (!activeYard) return filterBarCards.filter((c) => c.category !== "Base");
+    if (!activeYard) {
+      return filterBarCards.filter((c) => c.category !== "Base" && c.insert_set == null);
+    }
     return filterBarCards.filter(activeYard.test);
   }, [filterBarCards, activeYard]);
 
@@ -271,19 +294,25 @@ export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserPro
                   {yardCounts.get(yard.key) ?? 0}{" "}
                   {(yardCounts.get(yard.key) ?? 0) === 1 ? "card" : "cards"}
                 </p>
+                {yard.isAlbum && (
+                  <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[9px] font-medium text-muted">
+                    <LayoutGrid className="h-2.5 w-2.5" />
+                    Sticker Album
+                  </span>
+                )}
               </div>
             </button>
           ))}
         </div>
       )}
 
-      {activeYard?.key === "base" ? (
-        // BaseYard is a full Set+Team checklist, not a filtered list of the
-        // user's own cards — the normal filter bar doesn't apply here
-        // (StickerAlbum has its own Set/Team pickers), and it needs every
-        // owned card, not just whatever the filter bar would have narrowed
-        // to.
-        <StickerAlbum cards={cards} targetUserId={currentUserId} />
+      {activeYard?.key === "base" || activeYard?.key === "insert" ? (
+        // BaseYard/InsertYard are full Set(+Team/InsertSet) checklists, not
+        // a filtered list of the user's own cards — the normal filter bar
+        // doesn't apply here (ChecklistAlbum has its own Set/grouping
+        // pickers), and it needs every owned card, not just whatever the
+        // filter bar would have narrowed to.
+        <ChecklistAlbum cards={cards} targetUserId={currentUserId} mode={activeYard.key} />
       ) : (
         <>
           <div className="mb-6 rounded-lg border border-border bg-surface p-4">

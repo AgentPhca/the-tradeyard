@@ -8,10 +8,10 @@ import { Check, ChevronDown, ChevronUp, ImageOff, Lock } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
-import { ownershipKey } from "@/lib/utils/baseyard";
+import { insertOwnershipKey, ownershipKey } from "@/lib/utils/checklist";
 import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
-type BaseCatalogRow = Pick<
+type ChecklistCatalogRow = Pick<
   CardCatalogEntry,
   | "id"
   | "set_name"
@@ -29,9 +29,9 @@ type BaseCatalogRow = Pick<
 // cleanly in class_segment ("Rookie Class"/"Veterans Class"); Finest has no
 // class_segment at all and instead encodes it as a suffix on insert_set
 // ("BASE CARDS COMMON"/"BASE CARDS UNCOMMON"/"BASE CARDS RARE" — verified
-// against the real checklist import data). Sets with neither just show no
-// badge, which is the expected/correct fallback.
-function tierLabel(row: BaseCatalogRow): string | null {
+// against the real checklist import data). Rows with neither just show no
+// badge, which is the expected/correct fallback — true of most Insert rows.
+function tierLabel(row: ChecklistCatalogRow): string | null {
   if (row.class_segment) return row.class_segment;
   const insertSet = row.insert_set?.toUpperCase() ?? "";
   if (insertSet.endsWith("RARE")) return "Rare";
@@ -51,30 +51,37 @@ const lockedPatternStyle = {
 const tileInactiveClass = "border-border bg-surface text-muted hover:border-primary/40 hover:text-text";
 const tileSelectedClass = "border-primary/30 bg-primary/10 text-primary";
 
-interface StickerAlbumProps {
+type ChecklistMode = "base" | "insert";
+
+interface ChecklistAlbumProps {
   cards: Card[];
-  // Whose album this is — StickerAlbum trusts the `cards` prop is already
+  // Whose album this is — ChecklistAlbum trusts the `cards` prop is already
   // scoped to this user (as /collection/page.tsx and the profile page both
   // do), but re-filters by it anyway rather than assuming: this component
-  // is now reachable from a "viewing someone else's data" context (a
-  // visitor's read-only view on a public profile), which is exactly the
-  // kind of boundary worth double-checking at.
+  // is reachable from a "viewing someone else's data" context (a visitor's
+  // read-only view on a public profile), which is exactly the kind of
+  // boundary worth double-checking at.
   targetUserId: string;
-  // Read-only mode for a visitor browsing another user's public BaseYard:
-  // empty slots render as plain locked tiles instead of a link to Add Card
-  // (a visitor can't add cards to someone else's collection), everything
-  // else — Set/Division/Team browsing, owned-card tiles, progress bar —
-  // stays interactive.
+  // Read-only mode for a visitor browsing another user's public Base/Insert
+  // Yard: empty slots render as plain locked tiles instead of a link to Add
+  // Card (a visitor can't add cards to someone else's collection),
+  // everything else — Set/Team or Set/Insert-Set browsing, owned-card
+  // tiles, progress bar — stays interactive.
   readOnly?: boolean;
+  // "base": BaseYard — Set, then NFL division/team, checklist scoped to
+  // category='Base'. "insert": InsertYard — Set, then Insert Set (no team
+  // level, insert sets aren't team-organized), checklist scoped to
+  // insert_set is not null and category <> 'Base'.
+  mode: ChecklistMode;
 }
 
-// BaseYard's "sticker album" mode: a full Set+Team checklist pulled from
-// card_catalog (category='Base'), with the user's own cards overlaid onto
-// the slots they've filled. This is deliberately a from-scratch UI rather
-// than the normal filter-bar + card grid the other yards use — a checklist
-// needs to show *every* catalog slot (owned or not), not just the cards the
-// user actually has.
-export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerAlbumProps) {
+// The checklist-style yards (BaseYard, InsertYard): a full Set(+grouping)
+// checklist pulled from card_catalog, with the user's own cards overlaid
+// onto the slots they've filled. This is deliberately a from-scratch UI
+// rather than the normal filter-bar + card grid the other yards use — a
+// checklist needs to show *every* catalog slot (owned or not), not just the
+// cards the user actually has.
+export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: ChecklistAlbumProps) {
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname();
@@ -85,25 +92,31 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
     [cards, targetUserId]
   );
 
-  // Set/Team live in the URL (?baseSet=&baseTeam=) rather than being purely
-  // local state, so returning here — e.g. after saving a card added from an
-  // empty slot — lands back on the exact same checklist instead of
-  // resetting to the "best owned set" default.
-  const urlSet = searchParams.get("baseSet") ?? "";
-  const urlTeam = searchParams.get("baseTeam") ?? "";
+  // Set/grouping live in the URL rather than being purely local state, so
+  // returning here — e.g. after saving a card added from an empty slot —
+  // lands back on the exact same checklist instead of resetting to the
+  // "best owned set" default. BaseYard and InsertYard use distinct param
+  // names so switching between the two yards (or having both linked to from
+  // elsewhere) never collides.
+  const setParamKey = mode === "base" ? "baseSet" : "insertYardSet";
+  const groupParamKey = mode === "base" ? "baseTeam" : "insertYardInsert";
 
-  const [rows, setRows] = useState<BaseCatalogRow[]>([]);
+  const urlSet = searchParams.get(setParamKey) ?? "";
+  const urlGroup = searchParams.get(groupParamKey) ?? "";
+
+  const [rows, setRows] = useState<ChecklistCatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [setName, setSetName] = useState(urlSet);
-  const [team, setTeam] = useState(urlTeam);
+  // "Team" for BaseYard, "Insert Set" for InsertYard.
+  const [groupValue, setGroupValue] = useState(urlGroup);
   const [activeDivision, setActiveDivision] = useState<string | null>(() => {
-    if (!urlTeam) return null;
-    const division = NFL_DIVISIONS.find((d) => d.teams.some((t) => t === urlTeam));
+    if (mode !== "base" || !urlGroup) return null;
+    const division = NFL_DIVISIONS.find((d) => d.teams.some((t) => t === urlGroup));
     return division?.name ?? null;
   });
   const [defaultSetPicked, setDefaultSetPicked] = useState(Boolean(urlSet));
 
-  function updateStickerParams(updates: Record<string, string>) {
+  function updateAlbumParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(updates)) {
       if (value) params.set(key, value);
@@ -114,40 +127,51 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
     });
   }
 
-  // Fetched once — every Base-category catalog row, across all sets. A few
-  // thousand rows at most, and it's a one-time load rather than a query per
-  // Set/Team click, which keeps switching between sets/teams instant.
+  // Fetched once — every catalog row this yard's checklist can ever need,
+  // across all sets. A few thousand rows at most, and it's a one-time load
+  // rather than a query per Set/grouping click, which keeps switching
+  // instant.
   //
-  // is_variation_of_base = false excludes photo-variation rows (e.g. "TEAM
-  // CAMO VARIATION", "LIGHTBOARD LOGO VARIATION") that the checklist import
-  // also tagged category='Base' — without this, the same player/card_number
-  // shows up 2-3x (once per variation) instead of once per real checklist
+  // BaseYard: category='Base', is_variation_of_base=false excludes
+  // photo-variation rows (e.g. "TEAM CAMO VARIATION") that the checklist
+  // import also tagged category='Base' — without this, the same
+  // player/card_number shows up 2-3x instead of once per real checklist
   // slot.
+  // InsertYard: insert_set is not null and category<>'Base' — the plain
+  // base checklist rows are tagged insert_set='BASE CARDS' in the source
+  // data, so category is what actually distinguishes "a real insert set"
+  // from "the base checklist", not insert_set alone. Guards the category
+  // comparison against null the same null-safe way as everywhere else in
+  // this app (NULL <> 'Base' is NULL, not true, in SQL's three-valued
+  // logic — a plain .neq() would silently drop any row with no category at
+  // all).
   //
   // Explicitly paginated with .range() rather than one .limit(10000) call —
   // a single request was still silently getting cut off well under 10000
-  // (confirmed by counting the real import data: Chrome Black+Chrome+Cosmic
-  // Chrome+Finest together total ~1,846 Base rows and were the only ones
-  // showing up; Resurgence+Signature Class+Flagship, everything after that
-  // in set_name order, were missing entirely — a client-side .limit() can't
-  // raise a cap the server itself is enforcing, e.g. PostgREST's db-max-rows
-  // project setting). Paging in chunks of 1000 sidesteps whatever that cap
-  // actually is, since no single request asks for more than that.
+  // (confirmed against the real import data — see git history). Paging in
+  // chunks of 1000 sidesteps whatever cap the server enforces, since no
+  // single request asks for more than that.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       const pageSize = 1000;
-      const allRows: BaseCatalogRow[] = [];
+      const allRows: ChecklistCatalogRow[] = [];
       let from = 0;
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const { data } = await supabase
+        let query = supabase
           .from("card_catalog")
           .select("id, set_name, team, player_name, card_number, is_rookie, insert_set, class_segment")
-          .eq("category", "Base")
-          .eq("is_variation_of_base", false)
+          .eq("is_variation_of_base", false);
+
+        query =
+          mode === "base"
+            ? query.eq("category", "Base")
+            : query.not("insert_set", "is", null).or("category.is.null,category.neq.Base");
+
+        const { data } = await query
           .order("set_name")
           .order("team")
           .order("player_name")
@@ -170,7 +194,7 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode]);
 
   const setOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -178,8 +202,8 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
     return Array.from(seen).sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
-  // Default to the Base-eligible set the user already owns the most cards
-  // in, falling back to alphabetically first once the catalog rows (and
+  // Default to the set the user already owns the most (matching) cards in,
+  // falling back to alphabetically first once the catalog rows (and
   // therefore the set list) have loaded.
   useEffect(() => {
     if (defaultSetPicked || setOptions.length === 0) return;
@@ -201,31 +225,31 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
 
   function handleSetChange(value: string) {
     setSetName(value);
-    setTeam("");
+    setGroupValue("");
     setActiveDivision(null);
-    updateStickerParams({ baseSet: value, baseTeam: "" });
+    updateAlbumParams({ [setParamKey]: value, [groupParamKey]: "" });
   }
 
-  // Single-open accordion: clicking the already-active division collapses
-  // it (the team it had selected, if any, is left as-is — collapsing is
-  // just tidying up the picker, not undoing the pick). Clicking a
-  // different division opens it and clears the team selection, since
-  // "no team chosen yet" is exactly the state right after a division
+  // Single-open accordion (BaseYard only): clicking the already-active
+  // division collapses it (the team it had selected, if any, is left as-is
+  // — collapsing is just tidying up the picker, not undoing the pick).
+  // Clicking a different division opens it and clears the team selection,
+  // since "no team chosen yet" is exactly the state right after a division
   // switch.
   function handleDivisionClick(divisionName: string) {
     if (activeDivision === divisionName) {
       setActiveDivision(null);
     } else {
       setActiveDivision(divisionName);
-      setTeam("");
-      updateStickerParams({ baseTeam: "" });
+      setGroupValue("");
+      updateAlbumParams({ [groupParamKey]: "" });
     }
   }
 
-  function handleTeamClick(t: string) {
-    const next = team === t ? "" : t;
-    setTeam(next);
-    updateStickerParams({ baseSet: setName, baseTeam: next });
+  function handleGroupClick(value: string) {
+    const next = groupValue === value ? "" : value;
+    setGroupValue(next);
+    updateAlbumParams({ [setParamKey]: setName, [groupParamKey]: next });
   }
 
   const rowsInSet = useMemo(
@@ -233,23 +257,47 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
     [rows, setName]
   );
 
-  const checklist = useMemo(
-    () => (team ? rowsInSet.filter((row) => row.team === team) : []),
-    [rowsInSet, team]
-  );
+  // InsertYard's flat list of insert sets available within the chosen Set
+  // — sorted alphabetically, same convention as the Set dropdown itself.
+  const insertSetOptions = useMemo(() => {
+    if (mode !== "insert") return [];
+    const seen = new Set<string>();
+    for (const row of rowsInSet) {
+      if (row.insert_set) seen.add(row.insert_set);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [mode, rowsInSet]);
+
+  const checklist = useMemo(() => {
+    if (!groupValue) return [];
+    return mode === "base"
+      ? rowsInSet.filter((row) => row.team === groupValue)
+      : rowsInSet.filter((row) => row.insert_set === groupValue);
+  }, [rowsInSet, groupValue, mode]);
 
   const ownedByKey = useMemo(() => {
     const map = new Map<string, Card>();
     for (const c of ownCards) {
-      if (c.category !== "Base" || !c.set_name) continue;
-      const key = ownershipKey(c.player_name, c.team, c.set_name);
-      if (!map.has(key)) map.set(key, c);
+      if (!c.set_name) continue;
+      if (mode === "base") {
+        if (c.category !== "Base") continue;
+        const key = ownershipKey(c.player_name, c.team, c.set_name);
+        if (!map.has(key)) map.set(key, c);
+      } else {
+        if (c.category === "Base" || !c.insert_set) continue;
+        const key = insertOwnershipKey(c.player_name, c.team, c.set_name, c.insert_set, c.card_number);
+        if (!map.has(key)) map.set(key, c);
+      }
     }
     return map;
-  }, [ownCards]);
+  }, [ownCards, mode]);
 
-  function findOwnedCard(row: BaseCatalogRow) {
-    return ownedByKey.get(ownershipKey(row.player_name, row.team, row.set_name));
+  function findOwnedCard(row: ChecklistCatalogRow) {
+    const key =
+      mode === "base"
+        ? ownershipKey(row.player_name, row.team, row.set_name)
+        : insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
+    return ownedByKey.get(key);
   }
 
   const ownedCount = useMemo(
@@ -266,7 +314,9 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
   if (setOptions.length === 0) {
     return (
       <p className="text-sm text-muted">
-        No Base checklist data is available yet for any set.
+        {mode === "base"
+          ? "No Base checklist data is available yet for any set."
+          : "No Insert Set checklist data is available yet for any set."}
       </p>
     );
   }
@@ -274,10 +324,10 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
   return (
     <div>
       <div className="mb-4">
-        <label htmlFor="stickerSet" className="mb-1.5 block text-sm font-medium text-text">
+        <label htmlFor="checklistSet" className="mb-1.5 block text-sm font-medium text-text">
           Set
         </label>
-        <Select id="stickerSet" value={setName} onChange={(e) => handleSetChange(e.target.value)}>
+        <Select id="checklistSet" value={setName} onChange={(e) => handleSetChange(e.target.value)}>
           {setOptions.map((s) => (
             <option key={s} value={s}>
               {s}
@@ -286,55 +336,88 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
         </Select>
       </div>
 
-      <div className="mb-2 grid grid-cols-4 gap-2">
-        {NFL_DIVISIONS.map((division) => {
-          const active = activeDivision === division.name;
-          return (
-            <button
-              key={division.name}
-              type="button"
-              onClick={() => handleDivisionClick(division.name)}
-              className={`flex items-center justify-between gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
-                active
-                  ? "border-primary bg-[#14532D] text-primary"
-                  : "border-border bg-surface text-muted hover:border-primary/40 hover:text-text"
-              }`}
-            >
-              <span className="truncate">{division.name}</span>
-              {active ? (
-                <ChevronUp className="h-3.5 w-3.5 shrink-0" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {activeDivision && (
-        <div className="mb-4 rounded-lg border border-primary/40 bg-[#0F1520] p-3">
-          <div className="grid grid-cols-4 gap-2">
-            {NFL_DIVISIONS.find((d) => d.name === activeDivision)?.teams.map((t) => {
-              const selected = team === t;
+      {mode === "base" ? (
+        <>
+          <div className="mb-2 grid grid-cols-4 gap-2">
+            {NFL_DIVISIONS.map((division) => {
+              const active = activeDivision === division.name;
               return (
                 <button
-                  key={t}
+                  key={division.name}
                   type="button"
-                  onClick={() => handleTeamClick(t)}
-                  className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
-                    selected ? tileSelectedClass : tileInactiveClass
+                  onClick={() => handleDivisionClick(division.name)}
+                  className={`flex items-center justify-between gap-1 rounded-lg border px-2.5 py-2 text-xs font-medium transition-colors ${
+                    active
+                      ? "border-primary bg-[#14532D] text-primary"
+                      : "border-border bg-surface text-muted hover:border-primary/40 hover:text-text"
                   }`}
                 >
-                  {t}
+                  <span className="truncate">{division.name}</span>
+                  {active ? (
+                    <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                  )}
                 </button>
               );
             })}
           </div>
+
+          {activeDivision && (
+            <div className="mb-4 rounded-lg border border-primary/40 bg-[#0F1520] p-3">
+              <div className="grid grid-cols-4 gap-2">
+                {NFL_DIVISIONS.find((d) => d.name === activeDivision)?.teams.map((t) => {
+                  const selected = groupValue === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => handleGroupClick(t)}
+                      className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
+                        selected ? tileSelectedClass : tileInactiveClass
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium text-text">Insert Set</label>
+          {insertSetOptions.length === 0 ? (
+            <p className="text-sm text-muted">No insert sets found for this set.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {insertSetOptions.map((option) => {
+                const selected = groupValue === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => handleGroupClick(option)}
+                    className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
+                      selected ? tileSelectedClass : tileInactiveClass
+                    }`}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {!team ? (
-        <p className="text-sm text-muted">Select a team above to see its checklist.</p>
+      {!groupValue ? (
+        <p className="text-sm text-muted">
+          {mode === "base"
+            ? "Select a team above to see its checklist."
+            : "Select an insert set above to see its checklist."}
+        </p>
       ) : (
         <>
           <div className="mb-4">
@@ -423,8 +506,8 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
                 </>
               );
 
-              // Read-only (a visitor browsing someone else's BaseYard) can't
-              // add cards to someone else's collection, so an empty slot is
+              // Read-only (a visitor browsing someone else's yard) can't add
+              // cards to someone else's collection, so an empty slot is
               // just a static tile there instead of a link to Add Card.
               if (readOnly) {
                 return (
@@ -437,10 +520,15 @@ export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerA
                 );
               }
 
+              const addCardHref =
+                mode === "base"
+                  ? `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(groupValue)}`
+                  : `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&insertSet=${encodeURIComponent(groupValue)}`;
+
               return (
                 <Link
                   key={row.id}
-                  href={`/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`}
+                  href={addCardHref}
                   className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
                 >
                   {lockedTileContent}
