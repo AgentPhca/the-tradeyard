@@ -53,6 +53,19 @@ const tileSelectedClass = "border-primary/30 bg-primary/10 text-primary";
 
 interface StickerAlbumProps {
   cards: Card[];
+  // Whose album this is — StickerAlbum trusts the `cards` prop is already
+  // scoped to this user (as /collection/page.tsx and the profile page both
+  // do), but re-filters by it anyway rather than assuming: this component
+  // is now reachable from a "viewing someone else's data" context (a
+  // visitor's read-only view on a public profile), which is exactly the
+  // kind of boundary worth double-checking at.
+  targetUserId: string;
+  // Read-only mode for a visitor browsing another user's public BaseYard:
+  // empty slots render as plain locked tiles instead of a link to Add Card
+  // (a visitor can't add cards to someone else's collection), everything
+  // else — Set/Division/Team browsing, owned-card tiles, progress bar —
+  // stays interactive.
+  readOnly?: boolean;
 }
 
 // BaseYard's "sticker album" mode: a full Set+Team checklist pulled from
@@ -61,11 +74,16 @@ interface StickerAlbumProps {
 // than the normal filter-bar + card grid the other yards use — a checklist
 // needs to show *every* catalog slot (owned or not), not just the cards the
 // user actually has.
-export function StickerAlbum({ cards }: StickerAlbumProps) {
+export function StickerAlbum({ cards, targetUserId, readOnly = false }: StickerAlbumProps) {
   const supabase = createClient();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  const ownCards = useMemo(
+    () => cards.filter((c) => c.owner_id === targetUserId),
+    [cards, targetUserId]
+  );
 
   // Set/Team live in the URL (?baseSet=&baseTeam=) rather than being purely
   // local state, so returning here — e.g. after saving a card added from an
@@ -167,7 +185,7 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
     if (defaultSetPicked || setOptions.length === 0) return;
 
     const ownedCountBySet = new Map<string, number>();
-    for (const c of cards) {
+    for (const c of ownCards) {
       if (!c.set_name) continue;
       ownedCountBySet.set(c.set_name, (ownedCountBySet.get(c.set_name) ?? 0) + 1);
     }
@@ -222,13 +240,13 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
 
   const ownedByKey = useMemo(() => {
     const map = new Map<string, Card>();
-    for (const c of cards) {
+    for (const c of ownCards) {
       if (c.category !== "Base" || !c.set_name) continue;
       const key = ownershipKey(c.player_name, c.team, c.set_name);
       if (!map.has(key)) map.set(key, c);
     }
     return map;
-  }, [cards]);
+  }, [ownCards]);
 
   function findOwnedCard(row: BaseCatalogRow) {
     return ownedByKey.get(ownershipKey(row.player_name, row.team, row.set_name));
@@ -381,12 +399,8 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
                 );
               }
 
-              return (
-                <Link
-                  key={row.id}
-                  href={`/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`}
-                  className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
-                >
+              const lockedTileContent = (
+                <>
                   <div
                     className="flex aspect-[5/7] w-full items-center justify-center"
                     style={lockedPatternStyle}
@@ -406,6 +420,30 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
                       )}
                     </div>
                   </div>
+                </>
+              );
+
+              // Read-only (a visitor browsing someone else's BaseYard) can't
+              // add cards to someone else's collection, so an empty slot is
+              // just a static tile there instead of a link to Add Card.
+              if (readOnly) {
+                return (
+                  <div
+                    key={row.id}
+                    className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface"
+                  >
+                    {lockedTileContent}
+                  </div>
+                );
+              }
+
+              return (
+                <Link
+                  key={row.id}
+                  href={`/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`}
+                  className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
+                >
+                  {lockedTileContent}
                 </Link>
               );
             })}

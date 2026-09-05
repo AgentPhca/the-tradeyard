@@ -47,7 +47,7 @@ export default async function CollectionPage() {
       </div>
 
       <Suspense fallback={null}>
-        <CollectionBrowser cards={cards} />
+        <CollectionBrowser cards={cards} currentUserId={user?.id ?? ""} />
       </Suspense>
     </div>
   );

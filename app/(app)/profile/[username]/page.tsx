@@ -8,6 +8,7 @@ import { RatingWidget } from "@/components/profile/RatingWidget";
 import { RoleBadges } from "@/components/profile/RoleBadges";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
+import { StickerAlbum } from "@/components/collection/StickerAlbum";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicBaseYardProgress, type BaseYardSetProgress } from "@/lib/baseyard/getPublicBaseYardProgress";
 import type { Card, Wishlist } from "@/lib/types/database";
@@ -30,10 +31,10 @@ export default async function ProfilePage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; baseSet?: string }>;
 }) {
   const { username } = await params;
-  const { tab } = await searchParams;
+  const { tab, baseSet } = await searchParams;
 
   const supabase = await createClient();
 
@@ -55,6 +56,12 @@ export default async function ProfilePage({
 
   const TABS = ALL_TABS.filter((t) => t.key !== "baseyard" || profile.show_baseyard_publicly);
   const activeTab: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : "collection";
+
+  // The owner always drills into a set via the full interactive album on
+  // /collection (their tiles link there, see below) — the embedded
+  // read-only album on this page is only ever for a visitor looking at
+  // someone else's BaseYard.
+  const showBaseYardAlbum = activeTab === "baseyard" && !isOwnProfile && Boolean(baseSet);
 
   const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
     supabase
@@ -117,6 +124,7 @@ export default async function ProfilePage({
   let cards: Card[] = [];
   let lookingFor: Wishlist[] = [];
   let baseYardProgress: BaseYardSetProgress[] = [];
+  let baseYardAlbumCards: Card[] = [];
 
   if (activeTab === "looking") {
     const { data } = await supabase
@@ -125,6 +133,18 @@ export default async function ProfilePage({
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false });
     lookingFor = data ?? [];
+  } else if (activeTab === "baseyard" && showBaseYardAlbum) {
+    // Covered by the cards RLS policy's baseyard clause (see
+    // baseyard_public_visibility.sql) — a personal_collection Base card is
+    // visible to any authenticated viewer once its owner has
+    // show_baseyard_publicly = true, same as the progress summary below.
+    const { data } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("owner_id", profile.id)
+      .eq("category", "Base")
+      .neq("status", "traded");
+    baseYardAlbumCards = data ?? [];
   } else if (activeTab === "baseyard") {
     baseYardProgress = await getPublicBaseYardProgress(supabase, profile.id);
   } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
@@ -269,14 +289,34 @@ export default async function ProfilePage({
             This user doesn&rsquo;t show their Personal Collection publicly.
           </p>
         ) : activeTab === "baseyard" ? (
-          baseYardProgress.length === 0 ? (
+          showBaseYardAlbum ? (
+            <div>
+              <Link
+                href={`/profile/${profile.username}?tab=baseyard`}
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted hover:text-text"
+              >
+                &larr; Back to BaseYard overview
+              </Link>
+              <StickerAlbum cards={baseYardAlbumCards} targetUserId={profile.id} readOnly />
+            </div>
+          ) : baseYardProgress.length === 0 ? (
             <p className="text-sm text-muted">No Base checklist data available yet.</p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {baseYardProgress.map((set) => {
                 const pct = set.total > 0 ? Math.round((set.owned / set.total) * 100) : 0;
+                // The owner drills into the full interactive album on
+                // /collection (Add Card etc. only make sense there); a
+                // visitor drills into a read-only album right here.
+                const tileHref = isOwnProfile
+                  ? `/collection?yard=base&baseSet=${encodeURIComponent(set.setName)}`
+                  : `/profile/${profile.username}?tab=baseyard&baseSet=${encodeURIComponent(set.setName)}`;
                 return (
-                  <div key={set.setName} className="rounded-lg border border-border bg-surface p-4">
+                  <Link
+                    key={set.setName}
+                    href={tileHref}
+                    className="rounded-lg border border-border bg-surface p-4 transition-colors hover:border-primary/40"
+                  >
                     <div className="mb-1.5 flex items-center justify-between text-sm">
                       <span className="font-medium text-text">{set.setName}</span>
                       <span className="text-muted">{pct}%</span>
@@ -290,7 +330,7 @@ export default async function ProfilePage({
                     <p className="mt-1.5 text-xs text-muted">
                       {set.owned} / {set.total} collected
                     </p>
-                  </div>
+                  </Link>
                 );
               })}
             </div>

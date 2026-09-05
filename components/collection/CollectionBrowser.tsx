@@ -94,9 +94,13 @@ function uniqueOptions(values: (string | null)[], label: (value: string) => stri
 
 interface CollectionBrowserProps {
   cards: Card[];
+  // Passed through to StickerAlbum (BaseYard) — see its targetUserId prop.
+  // Empty when logged out, but cards is always [] in that case too (see the
+  // early return below), so StickerAlbum never actually mounts with it.
+  currentUserId: string;
 }
 
-export function CollectionBrowser({ cards }: CollectionBrowserProps) {
+export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -279,7 +283,7 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
         // (StickerAlbum has its own Set/Team pickers), and it needs every
         // owned card, not just whatever the filter bar would have narrowed
         // to.
-        <StickerAlbum cards={cards} />
+        <StickerAlbum cards={cards} targetUserId={currentUserId} />
       ) : (
         <>
           <div className="mb-6 rounded-lg border border-border bg-surface p-4">
