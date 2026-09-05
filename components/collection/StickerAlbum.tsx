@@ -8,6 +8,7 @@ import { Check, ChevronDown, ChevronUp, ImageOff, Lock } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
+import { ownershipKey } from "@/lib/utils/baseyard";
 import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
 type BaseCatalogRow = Pick<
@@ -218,15 +219,6 @@ export function StickerAlbum({ cards }: StickerAlbumProps) {
     () => (team ? rowsInSet.filter((row) => row.team === team) : []),
     [rowsInSet, team]
   );
-
-  // A catalog row counts as owned when the user has a card flagged
-  // category='Base' whose player/team/set matches — not just cards linked
-  // via catalog_id. This also picks up cards that were manually flagged
-  // "Base Set" with no catalog match at all (no catalog_id), which
-  // catalog_id-only matching would otherwise miss entirely.
-  function ownershipKey(playerName: string, team: string | null, set: string) {
-    return `${playerName}|${team ?? ""}|${set}`;
-  }
 
   const ownedByKey = useMemo(() => {
     const map = new Map<string, Card>();

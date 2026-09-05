@@ -20,6 +20,7 @@ export type Profile = {
   ebay_url: string | null;
   allow_contact: boolean;
   show_personal_collection: boolean;
+  show_baseyard_publicly: boolean;
   created_at: string;
 };
 

@@ -9,14 +9,21 @@ import { RoleBadges } from "@/components/profile/RoleBadges";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/server";
+import { getPublicBaseYardProgress, type BaseYardSetProgress } from "@/lib/baseyard/getPublicBaseYardProgress";
 import type { Card, Wishlist } from "@/lib/types/database";
 
-const TABS = [
+// BaseYard is filtered out below unless the profile has opted in (see
+// show_baseyard_publicly) — parallel to "My Collection", not nested inside
+// it, since Base cards no longer show up in that tab at all.
+const ALL_TABS = [
   { key: "collection", label: "My Collection" },
+  { key: "baseyard", label: "BaseYard" },
   { key: "trade", label: "For Trade" },
   { key: "traded", label: "Traded" },
   { key: "looking", label: "Looking For" },
 ] as const;
+
+type TabKey = (typeof ALL_TABS)[number]["key"];
 
 export default async function ProfilePage({
   params,
@@ -27,7 +34,6 @@ export default async function ProfilePage({
 }) {
   const { username } = await params;
   const { tab } = await searchParams;
-  const activeTab = TABS.some((t) => t.key === tab) ? (tab as (typeof TABS)[number]["key"]) : "collection";
 
   const supabase = await createClient();
 
@@ -46,6 +52,9 @@ export default async function ProfilePage({
   }
 
   const isOwnProfile = user?.id === profile.id;
+
+  const TABS = ALL_TABS.filter((t) => t.key !== "baseyard" || profile.show_baseyard_publicly);
+  const activeTab: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : "collection";
 
   const [{ count: followerCount }, { count: followingCount }] = await Promise.all([
     supabase
@@ -107,6 +116,7 @@ export default async function ProfilePage({
 
   let cards: Card[] = [];
   let lookingFor: Wishlist[] = [];
+  let baseYardProgress: BaseYardSetProgress[] = [];
 
   if (activeTab === "looking") {
     const { data } = await supabase
@@ -115,15 +125,28 @@ export default async function ProfilePage({
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false });
     lookingFor = data ?? [];
+  } else if (activeTab === "baseyard") {
+    baseYardProgress = await getPublicBaseYardProgress(supabase, profile.id);
   } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
     const status =
       activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
-    const { data } = await supabase
+    let query = supabase
       .from("cards")
       .select("*")
       .eq("owner_id", profile.id)
-      .eq("status", status)
-      .order(activeTab === "traded" ? "traded_at" : "created_at", { ascending: false });
+      .eq("status", status);
+    // Base cards are BaseYard's own thing (see the dedicated tab below) —
+    // "My Collection" no longer mixes them in, for owner and visitors alike.
+    // .neq("category", "Base") alone would also silently drop every card
+    // with category = null (NULL <> 'Base' is NULL, not true, in SQL's
+    // three-valued logic) — most non-catalog-matched cards — so null has
+    // to be let through explicitly.
+    if (activeTab === "collection") {
+      query = query.or("category.is.null,category.neq.Base");
+    }
+    const { data } = await query.order(activeTab === "traded" ? "traded_at" : "created_at", {
+      ascending: false,
+    });
     cards = data ?? [];
   }
 
@@ -245,6 +268,33 @@ export default async function ProfilePage({
           <p className="text-sm text-muted">
             This user doesn&rsquo;t show their Personal Collection publicly.
           </p>
+        ) : activeTab === "baseyard" ? (
+          baseYardProgress.length === 0 ? (
+            <p className="text-sm text-muted">No Base checklist data available yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {baseYardProgress.map((set) => {
+                const pct = set.total > 0 ? Math.round((set.owned / set.total) * 100) : 0;
+                return (
+                  <div key={set.setName} className="rounded-lg border border-border bg-surface p-4">
+                    <div className="mb-1.5 flex items-center justify-between text-sm">
+                      <span className="font-medium text-text">{set.setName}</span>
+                      <span className="text-muted">{pct}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-card">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width]"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted">
+                      {set.owned} / {set.total} collected
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : cards.length === 0 ? (
           <>
             {activeTab === "collection" && isOwnProfile && (

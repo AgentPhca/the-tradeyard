@@ -41,6 +41,12 @@ create table public.profiles (
   ebay_url text,
   allow_contact boolean not null default true,
   show_personal_collection boolean not null default false,
+  -- Opt-in, default off: whether this user's BaseYard (Base-card set
+  -- checklist progress) shows as its own section on their public profile.
+  -- Independent of show_personal_collection — a user can keep their general
+  -- collection private while still showing off BaseYard progress, or vice
+  -- versa. See baseyard_public_visibility.sql.
+  show_baseyard_publicly boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -379,8 +385,11 @@ create policy "Users can delete their own profile"
 -- ----------------------------------------------------------------------------
 -- For-trade and traded cards are visible to everyone; a personal_collection
 -- card is only visible to its owner unless that owner has opted in via
--- profiles.show_personal_collection.
-create policy "Cards are viewable respecting personal collection privacy"
+-- profiles.show_personal_collection — or, for Base-category cards
+-- specifically, via profiles.show_baseyard_publicly (the public BaseYard
+-- section on a profile needs to read a user's personal_collection Base
+-- cards even when their general collection stays private).
+create policy "Cards are viewable respecting personal collection and baseyard privacy"
   on public.cards for select
   to authenticated
   using (
@@ -390,6 +399,14 @@ create policy "Cards are viewable respecting personal collection privacy"
       select 1 from public.profiles p
       where p.id = cards.owner_id
         and p.show_personal_collection = true
+    )
+    or (
+      category = 'Base'
+      and exists (
+        select 1 from public.profiles p
+        where p.id = cards.owner_id
+          and p.show_baseyard_publicly = true
+      )
     )
   );
 

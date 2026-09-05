@@ -272,6 +272,19 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           </p>
         </div>
 
+        <div className="rounded-md border border-border bg-surface p-4">
+          <VisibilityToggle
+            profileId={profile.id}
+            initialValue={profile.show_baseyard_publicly}
+            field="show_baseyard_publicly"
+          />
+          <p className="mt-2 text-xs text-muted">
+            When on, a separate &ldquo;BaseYard&rdquo; section appears on your public
+            profile showing your Base set-completion progress — independent of your
+            Personal Collection setting above.
+          </p>
+        </div>
+
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         <button type="submit" className="btn-primary w-full" disabled={submitting}>

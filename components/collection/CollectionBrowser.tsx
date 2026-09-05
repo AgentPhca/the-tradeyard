@@ -176,8 +176,14 @@ export function CollectionBrowser({ cards }: CollectionBrowserProps) {
     return counts;
   }, [filterBarCards]);
 
+  // Base cards are BaseYard's own thing now (a checklist-completion game,
+  // not a "card in my collection" in the usual sense) — they only show up
+  // in the default grid's own dedicated yard, not mixed into the general
+  // list. RookieYard/AutoYard/GrailYard are unaffected: their test()
+  // functions don't look at category, so a card that happens to be both
+  // Base and e.g. a rookie still shows up there.
   const filteredCards = useMemo(() => {
-    if (!activeYard) return filterBarCards;
+    if (!activeYard) return filterBarCards.filter((c) => c.category !== "Base");
     return filterBarCards.filter(activeYard.test);
   }, [filterBarCards, activeYard]);
 
