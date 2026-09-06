@@ -11,8 +11,8 @@ export interface BaseYardSetProgress {
 // A compact, per-set summary for the public BaseYard profile section —
 // unlike the interactive checklist (ChecklistAlbum), this doesn't need the
 // full per-team grid, just "X / Y collected" per set. Reuses the same
-// player+team+set ownership matching ChecklistAlbum uses, so the two never
-// disagree on what counts as "owned".
+// player+team+set+card_number ownership matching ChecklistAlbum uses, so
+// the two never disagree on what counts as "owned".
 export async function getPublicBaseYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string
@@ -21,14 +21,15 @@ export async function getPublicBaseYardProgress(
   // way ChecklistAlbum fetches it (see that file for why .range() chunking
   // is required instead of a single large .limit()).
   const pageSize = 1000;
-  const catalogRows: { set_name: string; team: string | null; player_name: string }[] = [];
+  const catalogRows: { set_name: string; team: string | null; player_name: string; card_number: string | null }[] =
+    [];
   let from = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data } = await supabase
       .from("card_catalog")
-      .select("set_name, team, player_name")
+      .select("set_name, team, player_name, card_number")
       .eq("category", "Base")
       .eq("is_variation_of_base", false)
       .range(from, from + pageSize - 1);
@@ -43,14 +44,14 @@ export async function getPublicBaseYardProgress(
 
   const { data: ownedCards } = await supabase
     .from("cards")
-    .select("player_name, team, set_name")
+    .select("player_name, team, set_name, card_number")
     .eq("owner_id", ownerId)
     .eq("category", "Base")
     .neq("status", "traded")
     .not("set_name", "is", null);
 
   const ownedKeys = new Set(
-    (ownedCards ?? []).map((c) => ownershipKey(c.player_name, c.team, c.set_name!))
+    (ownedCards ?? []).map((c) => ownershipKey(c.player_name, c.team, c.set_name!, c.card_number))
   );
 
   const totals = new Map<string, number>();
@@ -58,7 +59,7 @@ export async function getPublicBaseYardProgress(
 
   for (const row of catalogRows) {
     totals.set(row.set_name, (totals.get(row.set_name) ?? 0) + 1);
-    if (ownedKeys.has(ownershipKey(row.player_name, row.team, row.set_name))) {
+    if (ownedKeys.has(ownershipKey(row.player_name, row.team, row.set_name, row.card_number))) {
       owned.set(row.set_name, (owned.get(row.set_name) ?? 0) + 1);
     }
   }

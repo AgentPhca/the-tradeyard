@@ -281,7 +281,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
       if (!c.set_name) continue;
       if (mode === "base") {
         if (c.category !== "Base") continue;
-        const key = ownershipKey(c.player_name, c.team, c.set_name);
+        const key = ownershipKey(c.player_name, c.team, c.set_name, c.card_number);
         if (!map.has(key)) map.set(key, c);
       } else {
         if (c.category === "Base" || !c.insert_set) continue;
@@ -305,7 +305,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
       entry.total += 1;
       const ownedKey =
         mode === "base"
-          ? ownershipKey(row.player_name, row.team, row.set_name)
+          ? ownershipKey(row.player_name, row.team, row.set_name, row.card_number)
           : insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
       if (ownedByKey.has(ownedKey)) entry.owned += 1;
       map.set(key, entry);
@@ -321,7 +321,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
   function findOwnedCard(row: ChecklistCatalogRow) {
     const key =
       mode === "base"
-        ? ownershipKey(row.player_name, row.team, row.set_name)
+        ? ownershipKey(row.player_name, row.team, row.set_name, row.card_number)
         : insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
     return ownedByKey.get(key);
   }
