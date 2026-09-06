@@ -21,6 +21,23 @@ body {
   background: var(--background);
 }
 
+@layer base {
+  /* iOS Safari auto-zooms the whole viewport in when a form control with a
+     computed font-size under 16px receives focus, and doesn't reliably
+     reset the zoom on blur — the page is left feeling "zoomed in" until
+     the user manually pinches back out. Every Input/Select/textarea in
+     this app used text-sm (14px), which is exactly the trigger. This
+     overrides that at the element level (Tailwind's utility layer still
+     wins if a component explicitly opts into a different size), so no
+     individual form control needs patching one by one.
+     https://css-tricks.com/16px-or-larger-text-prevents-ios-form-zoom/ */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;

@@ -556,15 +556,18 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
                     className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-card"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-medium text-text">
+                      <span className="block truncate font-medium text-text" title={match.player_name}>
                         {match.player_name}
                       </span>
-                      <span className="block truncate text-xs text-muted">
+                      <span className="block truncate text-xs text-muted" title={match.team ?? undefined}>
                         {match.team ?? "Team unknown"}
                       </span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className="block truncate text-xs text-text">
+                      <span
+                        className="block truncate text-xs text-text"
+                        title={match.insert_set ? titleCase(match.insert_set) : (match.set_name ?? undefined)}
+                      >
                         {match.insert_set ? titleCase(match.insert_set) : match.set_name}
                       </span>
                       <span className="block text-xs text-muted">

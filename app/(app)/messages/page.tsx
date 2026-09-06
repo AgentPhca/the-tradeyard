@@ -123,10 +123,16 @@ export default async function MessagesPage({
               >
                 <Avatar src={other?.avatar_url} alt={other?.username ?? ""} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text">
+                  <p
+                    className="truncate text-sm font-medium text-text"
+                    title={`@${other?.username ?? "Unknown"}`}
+                  >
                     @{other?.username ?? "Unknown"}
                   </p>
-                  <p className="truncate text-xs text-muted">
+                  <p
+                    className="truncate text-xs text-muted"
+                    title={lastMessage ? lastMessage.content : undefined}
+                  >
                     {lastMessage ? lastMessage.content : "No messages yet"}
                   </p>
                 </div>

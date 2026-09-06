@@ -228,7 +228,7 @@ export function TradingCard({
 
       <div className="flex flex-1 flex-col gap-1 p-4">
         <div className="flex items-start justify-between gap-2">
-          <Link href={`/collection/${card.id}`} className="min-w-0 truncate">
+          <Link href={`/collection/${card.id}`} className="min-w-0 truncate" title={card.player_name}>
             <h3 className="truncate font-semibold text-text hover:text-primary">
               {card.player_name}
               {card.card_number && (
@@ -251,7 +251,11 @@ export function TradingCard({
             </span>
           )}
         </div>
-        {card.team && <p className="truncate text-sm text-muted">{card.team}</p>}
+        {card.team && (
+          <p className="truncate text-sm text-muted" title={card.team}>
+            {card.team}
+          </p>
+        )}
         {card.set_name && <p className="text-sm text-text">{card.set_name}</p>}
         {insertSetLabel && <p className="text-xs text-muted">{insertSetLabel}</p>}
         {(card.parallel || serial) && (

@@ -109,7 +109,9 @@ export function MessageThread({
           className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 transition-colors hover:bg-surface"
         >
           <Avatar src={otherParticipant.avatar_url} alt={otherParticipant.username} size={36} />
-          <span className="truncate font-medium text-text">@{otherParticipant.username}</span>
+          <span className="truncate font-medium text-text" title={`@${otherParticipant.username}`}>
+            @{otherParticipant.username}
+          </span>
         </Link>
       </div>
 

@@ -147,7 +147,9 @@ export default async function CardDetailPage({
           >
             <Avatar src={owner.avatar_url} alt={owner.username} size={40} />
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-text">@{owner.username}</p>
+              <p className="truncate text-sm font-medium text-text" title={`@${owner.username}`}>
+                @{owner.username}
+              </p>
               <div className="mt-1 flex flex-wrap gap-1">
                 <RoleBadges roles={owner.role} />
               </div>

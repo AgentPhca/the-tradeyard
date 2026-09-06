@@ -101,7 +101,9 @@ export function ProfileMenu({ profile, followerCount, followingCount }: ProfileM
           <div className="flex items-center gap-3 border-b border-border p-3">
             <Avatar src={profile.avatar_url} alt={profile.username} size={40} />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-text">@{profile.username}</p>
+              <p className="truncate text-sm font-semibold text-text" title={`@${profile.username}`}>
+                @{profile.username}
+              </p>
               <p className="text-xs text-muted">
                 {profile.role.map((r) => ROLE_LABEL[r] ?? r).join(", ")}
               </p>

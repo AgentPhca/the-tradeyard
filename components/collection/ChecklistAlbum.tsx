@@ -338,7 +338,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
 
       {mode === "base" ? (
         <>
-          <div className="mb-2 grid grid-cols-4 gap-2">
+          <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {NFL_DIVISIONS.map((division) => {
               const active = activeDivision === division.name;
               return (
@@ -365,7 +365,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
 
           {activeDivision && (
             <div className="mb-4 rounded-lg border border-primary/40 bg-[#0F1520] p-3">
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {NFL_DIVISIONS.find((d) => d.name === activeDivision)?.teams.map((t) => {
                   const selected = groupValue === t;
                   return (
@@ -373,7 +373,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                       key={t}
                       type="button"
                       onClick={() => handleGroupClick(t)}
-                      className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
+                      className={`flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
                         selected ? tileSelectedClass : tileInactiveClass
                       }`}
                     >
@@ -399,7 +399,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                     key={option}
                     type="button"
                     onClick={() => handleGroupClick(option)}
-                    className={`truncate rounded-md border px-2 py-2 text-xs font-medium transition-colors ${
+                    className={`flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
                       selected ? tileSelectedClass : tileInactiveClass
                     }`}
                   >
@@ -466,13 +466,18 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                       </span>
                     </div>
                     <div className="px-2 py-1.5">
-                      <p className="truncate text-xs font-medium text-text">{row.player_name}</p>
+                      <p className="truncate text-xs font-medium text-text" title={row.player_name}>
+                        {row.player_name}
+                      </p>
                       <div className="mt-0.5 flex items-center gap-1">
                         {row.card_number && (
                           <span className="text-[10px] text-muted">#{row.card_number}</span>
                         )}
                         {tier && (
-                          <span className="inline-flex items-center truncate rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+                          <span
+                            className="inline-flex items-center truncate rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-primary"
+                            title={tier}
+                          >
                             {tier}
                           </span>
                         )}
@@ -491,13 +496,18 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                     <Lock className="h-5 w-5 text-muted" />
                   </div>
                   <div className="px-2 py-1.5">
-                    <p className="truncate text-xs text-muted">{row.player_name}</p>
+                    <p className="truncate text-xs text-muted" title={row.player_name}>
+                      {row.player_name}
+                    </p>
                     <div className="mt-0.5 flex items-center gap-1">
                       {row.card_number && (
                         <span className="text-[10px] text-muted">#{row.card_number}</span>
                       )}
                       {tier && (
-                        <span className="inline-flex items-center truncate rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-primary">
+                        <span
+                          className="inline-flex items-center truncate rounded-full border border-primary/30 bg-primary/10 px-1.5 text-[10px] font-medium text-primary"
+                          title={tier}
+                        >
                           {tier}
                         </span>
                       )}
