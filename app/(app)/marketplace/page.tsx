@@ -171,7 +171,7 @@ export default async function MarketplacePage({
             <p className="mt-4 text-sm text-muted">No cards match your filters right now.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {cards.map((card) => {
               const owner = ownerById.get(card.owner_id);
               return (
@@ -195,7 +195,7 @@ export default async function MarketplacePage({
           <p className="mt-4 text-sm text-muted">No one is looking for a matching card yet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {wishlistRows.map((entry) => {
             const requester = requesterById.get(entry.user_id);
             return (

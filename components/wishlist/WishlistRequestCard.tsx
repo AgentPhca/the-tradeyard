@@ -101,17 +101,19 @@ export function WishlistRequestCard({
         <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-3">
           <Link
             href={`/profile/${ownerUsername}`}
-            className="flex items-center gap-2 text-sm text-muted hover:text-text"
+            className="flex min-w-0 items-center gap-2 text-sm text-muted hover:text-text"
           >
             <Avatar src={ownerAvatarUrl} alt={ownerUsername} size={24} />
-            @{ownerUsername}
+            <span className="truncate" title={`@${ownerUsername}`}>
+              @{ownerUsername}
+            </span>
           </Link>
           {ownerAllowsContact && (
             <button
               type="button"
               onClick={handleContact}
               disabled={contacting}
-              className="btn-secondary disabled:opacity-60"
+              className="btn-secondary shrink-0 disabled:opacity-60"
             >
               <MessageCircle className="h-4 w-4" />
               {contacting ? "Opening chat..." : "Kontakt"}
