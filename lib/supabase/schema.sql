@@ -138,7 +138,17 @@ create table public.cards (
   -- databases, where card_catalog already exists.
   catalog_id uuid,
   status public.card_status not null default 'personal_collection',
+  -- Kept as a fallback/compat column — image_urls[1] is the source of truth
+  -- for the cover photo everywhere in the app now (see
+  -- multi_photo_cards.sql), but image_url is never dropped so any
+  -- long-tail direct read of it (or a row from before this migration ran)
+  -- still resolves to something.
   image_url text,
+  -- Up to 5 photos per card (front, back, close-ups, etc. — some cards
+  -- carry their serial number on the back only, which a single photo can't
+  -- document). First element is the cover photo shown everywhere except
+  -- the Card Detail page's gallery.
+  image_urls text[] not null default '{}',
   notes text,
   traded_at timestamptz,
   created_at timestamptz not null default now()

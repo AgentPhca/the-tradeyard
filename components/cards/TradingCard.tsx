@@ -18,6 +18,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
 import { findOrCreateConversation } from "@/lib/supabase/conversations";
+import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { titleCase } from "@/lib/utils/text";
 import type { Card as CardData } from "@/lib/types/database";
 
@@ -59,6 +60,7 @@ export function TradingCard({
       ? `${card.serial_number}/${card.print_run}`
       : card.serial_number ?? (card.print_run ? `/${card.print_run}` : null);
   const insertSetLabel = card.insert_set ? titleCase(card.insert_set) : null;
+  const imageUrl = coverPhoto(card);
 
   async function handleDelete() {
     setDeleting(true);
@@ -153,9 +155,9 @@ export function TradingCard({
     <div className="group flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
       <div className="relative aspect-[5/7] w-full bg-surface">
         <Link href={`/collection/${card.id}`} className="absolute inset-0 block">
-          {card.image_url ? (
+          {imageUrl ? (
             <Image
-              src={card.image_url}
+              src={imageUrl}
               alt={`${card.player_name} card`}
               fill
               sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"

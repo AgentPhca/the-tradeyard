@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowLeft, ImagePlus, Search } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, ImagePlus, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
@@ -20,6 +20,20 @@ import type {
   CardStatus,
   UserRole,
 } from "@/lib/types/database";
+
+const MAX_PHOTOS = 5;
+
+interface PhotoSlot {
+  // Stable key for list rendering — a real photo's storage URL, or a
+  // random id for a newly picked file that has no URL yet.
+  key: string;
+  // An already-uploaded storage URL, or an object-URL preview of a file
+  // that hasn't been uploaded yet.
+  previewUrl: string;
+  // Set only for a newly picked file pending upload on submit — absent for
+  // an existing photo carried over unchanged from the loaded card.
+  file?: File;
+}
 
 type CatalogMatch = Pick<
   CardCatalogEntry,
@@ -139,8 +153,10 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   // search with no match, same as category/is_rookie in that case.
   const [catalogId, setCatalogId] = useState<string | null>(card?.catalog_id ?? null);
   const [status, setStatus] = useState<CardStatus>(card?.status ?? "personal_collection");
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(card?.image_url ?? null);
+  const [photos, setPhotos] = useState<PhotoSlot[]>(() => {
+    const existingUrls = card?.image_urls?.length ? card.image_urls : card?.image_url ? [card.image_url] : [];
+    return existingUrls.map((url) => ({ key: url, previewUrl: url }));
+  });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -151,12 +167,21 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   const suppressSetReset = useRef(Boolean(card));
   const suppressSerialReset = useRef(Boolean(card));
 
+  // Revoke every newly-picked file's object URL on unmount — reads a ref
+  // (kept current below) rather than closing over `photos` directly, since
+  // an unmount cleanup only needs the latest snapshot, not to re-run on
+  // every photo add/remove/reorder.
+  const photosRef = useRef<PhotoSlot[]>(photos);
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
   useEffect(() => {
     return () => {
-      if (photo && photoPreview) URL.revokeObjectURL(photoPreview);
+      for (const p of photosRef.current) {
+        if (p.file) URL.revokeObjectURL(p.previewUrl);
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoPreview]);
+  }, []);
 
   // Prefill from a specific card_catalog row on load (?catalogId= from the
   // BaseYard sticker album's empty slots) — fetches that one row and feeds
@@ -359,10 +384,38 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     setCatalogId(null);
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    setPhoto(file);
-    setPhotoPreview(file ? URL.createObjectURL(file) : card?.image_url ?? null);
+  function handleAddPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    // Allow picking the same file again later (e.g. after removing it).
+    e.target.value = "";
+    if (files.length === 0) return;
+
+    const remainingSlots = MAX_PHOTOS - photos.length;
+    const toAdd = files.slice(0, remainingSlots).map((file) => ({
+      key: crypto.randomUUID(),
+      previewUrl: URL.createObjectURL(file),
+      file,
+    }));
+    setPhotos((prev) => [...prev, ...toAdd]);
+  }
+
+  function removePhoto(key: string) {
+    setPhotos((prev) => {
+      const target = prev.find((p) => p.key === key);
+      if (target?.file) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((p) => p.key !== key);
+    });
+  }
+
+  function movePhoto(key: string, direction: -1 | 1) {
+    setPhotos((prev) => {
+      const index = prev.findIndex((p) => p.key === key);
+      const swapWith = index + direction;
+      if (index === -1 || swapWith < 0 || swapWith >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[swapWith]] = [next[swapWith], next[index]];
+      return next;
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -411,13 +464,20 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       }
     }
 
-    let imageUrl: string | null = card?.image_url ?? null;
+    // Upload every newly-picked photo (in slot order); an existing photo
+    // carried over from the loaded card has no `file` and keeps its
+    // current storage URL as-is.
+    const imageUrls: string[] = [];
+    for (const p of photos) {
+      if (!p.file) {
+        imageUrls.push(p.previewUrl);
+        continue;
+      }
 
-    if (photo) {
-      const path = `${user.id}/${crypto.randomUUID()}-${photo.name}`;
+      const path = `${user.id}/${crypto.randomUUID()}-${p.file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("card-photos")
-        .upload(path, photo);
+        .upload(path, p.file);
 
       if (uploadError) {
         setError(uploadError.message);
@@ -428,8 +488,11 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       const {
         data: { publicUrl },
       } = supabase.storage.from("card-photos").getPublicUrl(path);
-      imageUrl = publicUrl;
+      imageUrls.push(publicUrl);
     }
+    // image_url (singular) stays populated as the cover photo for any code
+    // still reading the old fallback column — see lib/utils/cardPhotos.ts.
+    const imageUrl: string | null = imageUrls[0] ?? null;
 
     // Keep the original traded_at when the card was already traded and stays
     // traded; only stamp a fresh timestamp on the transition into "traded",
@@ -457,6 +520,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       catalog_id: catalogId,
       status,
       image_url: imageUrl,
+      image_urls: imageUrls,
       traded_at: tradedAt,
     };
 
@@ -496,36 +560,79 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
 
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-text" htmlFor="photo">
-            Photo
-          </label>
-          <label
-            htmlFor="photo"
-            className="flex aspect-[5/7] w-40 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-surface text-muted hover:border-primary/40"
-          >
-            {photoPreview ? (
-              <Image
-                src={photoPreview}
-                alt="Card preview"
-                width={160}
-                height={224}
-                unoptimized
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="flex flex-col items-center gap-2 px-4 text-center text-xs">
-                <ImagePlus className="h-6 w-6" />
-                Upload photo
-              </span>
+          <label className="mb-1.5 block text-sm font-medium text-text">Photos</label>
+          <div className="flex flex-wrap gap-3">
+            {photos.map((p, i) => (
+              <div
+                key={p.key}
+                className="relative aspect-[5/7] w-24 overflow-hidden rounded-lg border border-border bg-surface"
+              >
+                <Image
+                  src={p.previewUrl}
+                  alt={`Card photo ${i + 1}`}
+                  fill
+                  unoptimized
+                  className="object-cover"
+                />
+                {i === 0 && (
+                  <span className="absolute left-1 top-1 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground">
+                    Cover
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removePhoto(p.key)}
+                  title="Remove photo"
+                  className="absolute right-1 top-1 rounded-full bg-background/80 p-1 text-text backdrop-blur transition-colors hover:bg-background hover:text-red-400"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+                <div className="absolute bottom-1 left-1 right-1 flex justify-between">
+                  <button
+                    type="button"
+                    onClick={() => movePhoto(p.key, -1)}
+                    disabled={i === 0}
+                    title="Move earlier"
+                    className="rounded-full bg-background/80 p-1 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary disabled:opacity-0"
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => movePhoto(p.key, 1)}
+                    disabled={i === photos.length - 1}
+                    title="Move later"
+                    className="rounded-full bg-background/80 p-1 text-text backdrop-blur transition-colors hover:bg-background hover:text-primary disabled:opacity-0"
+                  >
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {photos.length < MAX_PHOTOS && (
+              <label
+                htmlFor="photos"
+                className="flex aspect-[5/7] w-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-surface text-muted hover:border-primary/40"
+              >
+                <ImagePlus className="h-5 w-5" />
+                <span className="px-2 text-center text-[10px]">Add photo</span>
+              </label>
             )}
-          </label>
+          </div>
           <input
-            id="photo"
+            id="photos"
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
-            onChange={handlePhotoChange}
+            onChange={handleAddPhotos}
           />
+          <p className="mt-1.5 text-xs text-muted">
+            {photos.length >= MAX_PHOTOS
+              ? "Maximum 5 photos"
+              : `Front, back, close-ups — up to ${MAX_PHOTOS} photos. First photo is the cover shown everywhere else.`}
+          </p>
         </div>
 
         <div className="relative">

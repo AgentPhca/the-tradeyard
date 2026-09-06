@@ -8,6 +8,7 @@ import { Check, ChevronDown, ChevronUp, ImageOff, Lock } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
+import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { insertOwnershipKey, ownershipKey } from "@/lib/utils/checklist";
 import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
@@ -485,6 +486,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
               const tier = tierLabel(row);
 
               if (ownedCard) {
+                const ownedCardImageUrl = coverPhoto(ownedCard);
                 return (
                   <Link
                     key={row.id}
@@ -492,9 +494,9 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                     className="flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40"
                   >
                     <div className="relative aspect-[5/7] w-full bg-surface">
-                      {ownedCard.image_url ? (
+                      {ownedCardImageUrl ? (
                         <Image
-                          src={ownedCard.image_url}
+                          src={ownedCardImageUrl}
                           alt={`${row.player_name} card`}
                           fill
                           sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"

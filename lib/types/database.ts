@@ -44,7 +44,11 @@ export type Card = {
   category: string | null;
   catalog_id: string | null;
   status: CardStatus;
+  // Fallback/compat single-photo column — image_urls[0] is the source of
+  // truth for the cover photo now, see lib/utils/cardPhotos.ts.
   image_url: string | null;
+  // Up to 5 photos, first element is the cover photo.
+  image_urls: string[];
   notes: string | null;
   traded_at: string | null;
   created_at: string;

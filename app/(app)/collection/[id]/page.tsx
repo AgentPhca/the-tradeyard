@@ -1,15 +1,16 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ImageOff, PenLine, Shirt } from "lucide-react";
+import { PenLine, Shirt } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BackButton } from "@/components/collection/BackButton";
 import { CardDetailActions } from "@/components/collection/CardDetailActions";
+import { CardPhotoGallery } from "@/components/cards/CardPhotoGallery";
 import { CollectionCardTile } from "@/components/cards/CollectionCardTile";
 import { MarketplaceCardTile } from "@/components/cards/MarketplaceCardTile";
 import { RoleBadges } from "@/components/profile/RoleBadges";
 import { createClient } from "@/lib/supabase/server";
 import { titleCase } from "@/lib/utils/text";
+import { allPhotos, coverPhoto } from "@/lib/utils/cardPhotos";
 import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
 import type { Card } from "@/lib/types/database";
 
@@ -156,19 +157,7 @@ export default async function CardDetailPage({
       <div className="flex flex-col gap-8 lg:flex-row">
         <div className="w-full lg:max-w-sm">
           <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border border-border bg-surface">
-            {card.image_url ? (
-              <Image
-                src={card.image_url}
-                alt={`${card.player_name} card`}
-                fill
-                sizes="(min-width: 1024px) 384px, 100vw"
-                className="object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <ImageOff className="h-10 w-10 text-muted" />
-              </div>
-            )}
+            <CardPhotoGallery images={allPhotos(card)} alt={`${card.player_name} card`} />
             <div className="absolute right-2 top-2">
               <span
                 className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
@@ -263,7 +252,7 @@ export default async function CardDetailPage({
                   <CollectionCardTile
                     key={c.id}
                     href={`/collection/${c.id}`}
-                    imageUrl={c.image_url}
+                    imageUrl={coverPhoto(c)}
                     playerName={c.player_name}
                     team={c.team}
                     setName={c.set_name}
@@ -289,7 +278,7 @@ export default async function CardDetailPage({
                     <MarketplaceCardTile
                       key={c.id}
                       href={`/collection/${c.id}`}
-                      imageUrl={c.image_url}
+                      imageUrl={coverPhoto(c)}
                       playerName={c.player_name}
                       team={c.team}
                       valueTag={cardValueTag(c)}
