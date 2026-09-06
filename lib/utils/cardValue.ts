@@ -35,3 +35,13 @@ export function cardValueTag(card: {
   const parts = [flags.join("+"), card.print_run != null ? `/${card.print_run}` : ""].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : "Base";
 }
+
+// Visual weight for a value tag on a Marketplace tile — gold for the
+// rarest tier, silver for the next two, the app's usual green accent for a
+// single chase attribute, and a plain neutral outline for a base card.
+export function cardValueTagClasses(tier: number): string {
+  if (tier === 1) return "border-[#EAB308] bg-[#3F2E0A] text-[#EAB308]";
+  if (tier <= 3) return "border-[#94A3B8] bg-[#1E293B] text-[#CBD5E1]";
+  if (tier <= 7) return "border-primary/50 bg-[#0D2818] text-primary";
+  return "border-border bg-[#21262D] text-muted";
+}

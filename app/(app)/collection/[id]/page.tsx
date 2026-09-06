@@ -5,7 +5,8 @@ import { ImageOff, PenLine, Shirt } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BackButton } from "@/components/collection/BackButton";
 import { CardDetailActions } from "@/components/collection/CardDetailActions";
-import { CompactCardTile } from "@/components/cards/CompactCardTile";
+import { CollectionCardTile } from "@/components/cards/CollectionCardTile";
+import { MarketplaceCardTile } from "@/components/cards/MarketplaceCardTile";
 import { RoleBadges } from "@/components/profile/RoleBadges";
 import { createClient } from "@/lib/supabase/server";
 import { titleCase } from "@/lib/utils/text";
@@ -139,6 +140,15 @@ export default async function CardDetailPage({
     })
     .slice(0, RECOMMENDATION_MAX);
 
+  // Marketplace tiles show who's offering each card, so batch-fetch the
+  // distinct sellers behind the recommended cards in one extra query.
+  const recommendedOwnerIds = Array.from(new Set(recommended.map((c) => c.owner_id)));
+  const { data: recommendedOwnersData } =
+    recommendedOwnerIds.length > 0
+      ? await supabase.from("profiles").select("id, username, avatar_url").in("id", recommendedOwnerIds)
+      : { data: [] as { id: string; username: string; avatar_url: string | null }[] };
+  const recommendedOwnersById = new Map((recommendedOwnersData ?? []).map((p) => [p.id, p]));
+
   return (
     <div>
       <BackButton />
@@ -240,38 +250,58 @@ export default async function CardDetailPage({
         </div>
       </div>
 
-      {alsoInCollection.length > 0 && (
-        <div className="mt-10">
-          <h2 className="mb-3 text-lg font-semibold text-text">Also in your collection</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-            {alsoInCollection.map((c) => (
-              <CompactCardTile
-                key={c.id}
-                href={`/collection/${c.id}`}
-                imageUrl={c.image_url}
-                title={c.set_name ?? "Unknown set"}
-                subtitle={c.parallel ?? undefined}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {(alsoInCollection.length > 0 || recommended.length > 0) && (
+        <div className="mt-10 border-t border-[#21262D] pt-8">
+          {alsoInCollection.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-text">In Your Collection</h2>
+              <p className="mb-3 mt-0.5 text-sm text-muted">
+                You own {alsoInCollection.length + 1} versions of {card.player_name}
+              </p>
+              <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+                {alsoInCollection.map((c) => (
+                  <CollectionCardTile
+                    key={c.id}
+                    href={`/collection/${c.id}`}
+                    imageUrl={c.image_url}
+                    playerName={c.player_name}
+                    team={c.team}
+                    setName={c.set_name}
+                    category={c.category}
+                    parallel={c.parallel}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
-      {recommended.length > 0 && (
-        <div className="mt-10">
-          <h2 className="mb-3 text-lg font-semibold text-text">You might also like</h2>
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-            {recommended.map((c) => (
-              <CompactCardTile
-                key={c.id}
-                href={`/collection/${c.id}`}
-                imageUrl={c.image_url}
-                title={c.player_name}
-                subtitle={c.team ?? undefined}
-                tag={cardValueTag(c)}
-              />
-            ))}
-          </div>
+          {recommended.length > 0 && (
+            <div className={alsoInCollection.length > 0 ? "mt-8 border-t border-[#21262D] pt-8" : ""}>
+              <h2 className="text-lg font-semibold text-text">Marketplace</h2>
+              <p className="mb-3 mt-0.5 text-sm text-muted">
+                {recommended.length} collector{recommended.length === 1 ? " is" : "s are"} offering related cards
+              </p>
+              <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+                {recommended.map((c) => {
+                  const seller = recommendedOwnersById.get(c.owner_id);
+                  if (!seller) return null;
+                  return (
+                    <MarketplaceCardTile
+                      key={c.id}
+                      href={`/collection/${c.id}`}
+                      imageUrl={c.image_url}
+                      playerName={c.player_name}
+                      team={c.team}
+                      valueTag={cardValueTag(c)}
+                      valueTier={cardValueTier(c)}
+                      sellerUsername={seller.username}
+                      sellerAvatarUrl={seller.avatar_url}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
