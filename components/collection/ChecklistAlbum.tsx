@@ -292,6 +292,32 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     return map;
   }, [ownCards, mode]);
 
+  // Per-group (team for BaseYard, insert set for InsertYard) completion
+  // within the current Set, computed for every group up front rather than
+  // only the currently selected one — so a chip can show "already 100%"
+  // at a glance, without clicking into each one to check.
+  const groupCompletion = useMemo(() => {
+    const map = new Map<string, { owned: number; total: number }>();
+    for (const row of rowsInSet) {
+      const key = mode === "base" ? row.team : row.insert_set;
+      if (!key) continue;
+      const entry = map.get(key) ?? { owned: 0, total: 0 };
+      entry.total += 1;
+      const ownedKey =
+        mode === "base"
+          ? ownershipKey(row.player_name, row.team, row.set_name)
+          : insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
+      if (ownedByKey.has(ownedKey)) entry.owned += 1;
+      map.set(key, entry);
+    }
+    return map;
+  }, [rowsInSet, ownedByKey, mode]);
+
+  function isGroupComplete(key: string) {
+    const entry = groupCompletion.get(key);
+    return Boolean(entry && entry.total > 0 && entry.owned === entry.total);
+  }
+
   function findOwnedCard(row: ChecklistCatalogRow) {
     const key =
       mode === "base"
@@ -368,16 +394,25 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {NFL_DIVISIONS.find((d) => d.name === activeDivision)?.teams.map((t) => {
                   const selected = groupValue === t;
+                  const complete = isGroupComplete(t);
                   return (
                     <button
                       key={t}
                       type="button"
                       onClick={() => handleGroupClick(t)}
-                      className={`flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
+                      className={`relative flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
                         selected ? tileSelectedClass : tileInactiveClass
                       }`}
                     >
                       {t}
+                      {complete && (
+                        <span
+                          title="100% collected"
+                          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                        >
+                          <Check className="h-2.5 w-2.5" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -394,16 +429,25 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {insertSetOptions.map((option) => {
                 const selected = groupValue === option;
+                const complete = isGroupComplete(option);
                 return (
                   <button
                     key={option}
                     type="button"
                     onClick={() => handleGroupClick(option)}
-                    className={`flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
+                    className={`relative flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
                       selected ? tileSelectedClass : tileInactiveClass
                     }`}
                   >
                     {option}
+                    {complete && (
+                      <span
+                        title="100% collected"
+                        className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                      >
+                        <Check className="h-2.5 w-2.5" />
+                      </span>
+                    )}
                   </button>
                 );
               })}

@@ -5,9 +5,17 @@ import { ImageOff, PenLine, Shirt } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BackButton } from "@/components/collection/BackButton";
 import { CardDetailActions } from "@/components/collection/CardDetailActions";
+import { CompactCardTile } from "@/components/cards/CompactCardTile";
 import { RoleBadges } from "@/components/profile/RoleBadges";
 import { createClient } from "@/lib/supabase/server";
 import { titleCase } from "@/lib/utils/text";
+import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
+import type { Card } from "@/lib/types/database";
+
+// How many marketplace recommendations to aim for before falling back to
+// the next priority source, and the hard cap on how many end up on screen.
+const RECOMMENDATION_TARGET = 6;
+const RECOMMENDATION_MAX = 12;
 
 export default async function CardDetailPage({
   params,
@@ -63,6 +71,73 @@ export default async function CardDetailPage({
     { label: "Numbered #", value: serial ?? "" },
     { label: "Condition", value: card.condition ?? "" },
   ].filter((row) => row.value);
+
+  // "Also in your collection" — the owner's other own cards of the same
+  // player. Filtering by team too (when known) avoids conflating two real
+  // people who happen to share a name. RLS already restricts this to cards
+  // the current viewer is allowed to see, same as everywhere else.
+  const alsoInCollectionQuery = supabase
+    .from("cards")
+    .select("*")
+    .eq("owner_id", card.owner_id)
+    .eq("player_name", card.player_name)
+    .neq("id", card.id)
+    .limit(RECOMMENDATION_MAX);
+  const { data: alsoInCollectionRows } = card.team
+    ? await alsoInCollectionQuery.eq("team", card.team)
+    : await alsoInCollectionQuery;
+  const alsoInCollection: Card[] = alsoInCollectionRows ?? [];
+
+  // "You might also like" — marketplace recommendations, gathered from
+  // multiple priority sources and deduped by id: same player first, same
+  // team as a fallback once the target count is short, and (for Insert
+  // cards) the same insert set as an additional source.
+  const recommendedById = new Map<string, Card>();
+
+  const { data: samePlayerRows } = await supabase
+    .from("cards")
+    .select("*")
+    .eq("status", "for_trade")
+    .eq("player_name", card.player_name)
+    .neq("id", card.id)
+    .limit(RECOMMENDATION_MAX);
+  for (const row of samePlayerRows ?? []) recommendedById.set(row.id, row as Card);
+
+  if (recommendedById.size < RECOMMENDATION_TARGET && card.team) {
+    const { data: sameTeamRows } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("status", "for_trade")
+      .eq("team", card.team)
+      .neq("player_name", card.player_name)
+      .neq("id", card.id)
+      .limit(RECOMMENDATION_MAX);
+    for (const row of sameTeamRows ?? []) recommendedById.set(row.id, row as Card);
+  }
+
+  if (card.category === "Insert" && card.insert_set) {
+    const { data: sameInsertSetRows } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("status", "for_trade")
+      .eq("insert_set", card.insert_set)
+      .neq("player_name", card.player_name)
+      .neq("id", card.id)
+      .limit(RECOMMENDATION_MAX);
+    for (const row of sameInsertSetRows ?? []) recommendedById.set(row.id, row as Card);
+  }
+
+  recommendedById.delete(card.id);
+
+  const recommended: Card[] = Array.from(recommendedById.values())
+    .sort((a, b) => {
+      const tierDiff = cardValueTier(a) - cardValueTier(b);
+      if (tierDiff !== 0) return tierDiff;
+      const aRun = a.print_run ?? Infinity;
+      const bRun = b.print_run ?? Infinity;
+      return aRun - bRun;
+    })
+    .slice(0, RECOMMENDATION_MAX);
 
   return (
     <div>
@@ -164,6 +239,41 @@ export default async function CardDetailPage({
           />
         </div>
       </div>
+
+      {alsoInCollection.length > 0 && (
+        <div className="mt-10">
+          <h2 className="mb-3 text-lg font-semibold text-text">Also in your collection</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+            {alsoInCollection.map((c) => (
+              <CompactCardTile
+                key={c.id}
+                href={`/collection/${c.id}`}
+                imageUrl={c.image_url}
+                title={c.set_name ?? "Unknown set"}
+                subtitle={c.parallel ?? undefined}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recommended.length > 0 && (
+        <div className="mt-10">
+          <h2 className="mb-3 text-lg font-semibold text-text">You might also like</h2>
+          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+            {recommended.map((c) => (
+              <CompactCardTile
+                key={c.id}
+                href={`/collection/${c.id}`}
+                imageUrl={c.image_url}
+                title={c.player_name}
+                subtitle={c.team ?? undefined}
+                tag={cardValueTag(c)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
