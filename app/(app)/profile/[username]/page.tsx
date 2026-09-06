@@ -191,14 +191,16 @@ export default async function ProfilePage({
       .select("*")
       .eq("owner_id", profile.id)
       .eq("status", status);
-    // Base and Insert cards are BaseYard's/InsertYard's own thing (see the
-    // dedicated tabs) — "My Collection" no longer mixes them in, for owner
-    // and visitors alike. .neq("category", "Base") alone would also
-    // silently drop every card with category = null (NULL <> 'Base' is
-    // NULL, not true, in SQL's three-valued logic) — most non-catalog-
-    // matched cards — so null has to be let through explicitly.
+    // Base cards are BaseYard's own thing (see the dedicated tab) — "My
+    // Collection" no longer mixes them in, for owner and visitors alike.
+    // Insert cards stay in this list (InsertYard is its own checklist view,
+    // but an Insert-category card is still "in the collection" too).
+    // .neq("category", "Base") alone would also silently drop every card
+    // with category = null (NULL <> 'Base' is NULL, not true, in SQL's
+    // three-valued logic) — most non-catalog-matched cards — so null has
+    // to be let through explicitly.
     if (activeTab === "collection") {
-      query = query.or("category.is.null,category.neq.Base").is("insert_set", null);
+      query = query.or("category.is.null,category.neq.Base");
     }
     const { data } = await query.order(activeTab === "traded" ? "traded_at" : "created_at", {
       ascending: false,

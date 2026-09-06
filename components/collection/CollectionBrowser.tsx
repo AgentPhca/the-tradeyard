@@ -200,16 +200,17 @@ export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserPro
     return counts;
   }, [filterBarCards]);
 
-  // Base and Insert cards are BaseYard's/InsertYard's own thing now
-  // (checklist-completion games, not a "card in my collection" in the usual
-  // sense) — they only show up in the default grid's own dedicated yard,
-  // not mixed into the general list. RookieYard/AutoYard/GrailYard are
-  // unaffected: their test() functions don't look at category/insert_set,
-  // so a card that happens to also be a rookie/autograph/grail still shows
-  // up there.
+  // Base cards are BaseYard's own thing now (a checklist-completion game,
+  // not a "card in my collection" in the usual sense) — they only show up
+  // in the default grid's own dedicated yard, not mixed into the general
+  // list. Insert cards stay in the default grid (InsertYard is its own
+  // checklist view, but an Insert-category card is still "in the
+  // collection" too). RookieYard/AutoYard/GrailYard are unaffected: their
+  // test() functions don't look at category, so a card that happens to
+  // also be a rookie/autograph/grail still shows up there.
   const filteredCards = useMemo(() => {
     if (!activeYard) {
-      return filterBarCards.filter((c) => c.category !== "Base" && c.insert_set == null);
+      return filterBarCards.filter((c) => c.category !== "Base");
     }
     return filterBarCards.filter(activeYard.test);
   }, [filterBarCards, activeYard]);
