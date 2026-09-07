@@ -13,6 +13,10 @@ interface MarketplaceCardTileProps {
   valueTier: number;
   sellerUsername: string;
   sellerAvatarUrl: string | null;
+  // Dashboard "Für dich" feed: a card not yet in the viewer's own
+  // collection gets a distinct "NEU" badge instead of the usual "For
+  // Trade" one — same listing, different reason to notice it.
+  isNew?: boolean;
 }
 
 // Tile for the "Marketplace" row on the Card Detail page — for_trade cards
@@ -29,6 +33,7 @@ export function MarketplaceCardTile({
   valueTier,
   sellerUsername,
   sellerAvatarUrl,
+  isNew = false,
 }: MarketplaceCardTileProps) {
   return (
     <div className="flex w-32 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
@@ -41,9 +46,15 @@ export function MarketplaceCardTile({
               <ImageOff className="h-6 w-6 text-muted" />
             </div>
           )}
-          <span className="absolute right-1 top-1 rounded-full bg-[#22C55E] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[#0D1117]">
-            For Trade
-          </span>
+          {isNew ? (
+            <span className="absolute right-1 top-1 rounded-full bg-[#3B82F6] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white">
+              Neu
+            </span>
+          ) : (
+            <span className="absolute right-1 top-1 rounded-full bg-[#22C55E] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[#0D1117]">
+              For Trade
+            </span>
+          )}
         </div>
         <div className="px-2 pt-1.5">
           <p className="line-clamp-2 text-xs font-medium leading-tight text-text" title={playerName}>

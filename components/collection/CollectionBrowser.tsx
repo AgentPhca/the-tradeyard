@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Gem, LayoutGrid, Layers, PenTool, Sparkles } from "lucide-react";
+import { ArrowLeft, Gem, LayoutGrid, Layers, PenTool, Shapes, Sparkles, Star } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
 import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
@@ -10,7 +10,7 @@ import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
-type YardKey = "rookie" | "base" | "insert" | "auto" | "grail";
+type YardKey = "rookie" | "base" | "insert" | "auto" | "grail" | "value" | "parallel";
 
 type SortKey = "recent" | "player" | "cardNumber" | "team";
 
@@ -98,6 +98,26 @@ const YARDS: Yard[] = [
     // other three.
     badgeClass: "bg-amber-500/10 text-amber-400",
     tileBorderClass: "border-amber-500/30",
+  },
+  {
+    key: "value",
+    label: "ValueYard",
+    description: "Numbered, autographed, or relic/patch cards",
+    icon: Star,
+    // Same "not a plain base card" rule as the Dashboard's ValueYard tile
+    // and the Card of the Week cron's candidate filter.
+    test: (c) => c.print_run != null || c.is_autograph || c.is_relic,
+    badgeClass: "bg-[#3A2E12] text-[#E8B94A]",
+    tileBorderClass: "border-border",
+  },
+  {
+    key: "parallel",
+    label: "ParallelYard",
+    description: "Cards with a named parallel",
+    icon: Shapes,
+    test: (c) => c.parallel != null,
+    badgeClass: "bg-fuchsia-500/10 text-fuchsia-400",
+    tileBorderClass: "border-border",
   },
 ];
 
