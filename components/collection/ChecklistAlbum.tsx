@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
 import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { insertOwnershipKey, ownershipKey } from "@/lib/utils/checklist";
+import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
 import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
 type ChecklistCatalogRow = Pick<
@@ -258,6 +259,12 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     [rows, setName]
   );
 
+  // Multi-player cards (e.g. "AFC REC Leaders") show the card/insert name
+  // instead of a single arbitrary player's name — computed once per Set
+  // rather than per slot. See lib/utils/multiPlayerCard.ts.
+  const multiPlayerKeys = useMemo(() => findMultiPlayerKeys(rowsInSet), [rowsInSet]);
+  const displayLabel = (row: ChecklistCatalogRow) => catalogRowDisplayLabel(row, multiPlayerKeys);
+
   // InsertYard's flat list of insert sets available within the chosen Set
   // — sorted alphabetically, same convention as the Set dropdown itself.
   const insertSetOptions = useMemo(() => {
@@ -497,7 +504,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                       {ownedCardImageUrl ? (
                         <Image
                           src={ownedCardImageUrl}
-                          alt={`${row.player_name} card`}
+                          alt={`${displayLabel(row)} card`}
                           fill
                           sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
                           className="object-cover"
@@ -512,8 +519,8 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                       </span>
                     </div>
                     <div className="px-2 py-1.5">
-                      <p className="truncate text-xs font-medium text-text" title={row.player_name}>
-                        {row.player_name}
+                      <p className="truncate text-xs font-medium text-text" title={displayLabel(row)}>
+                        {displayLabel(row)}
                       </p>
                       <div className="mt-0.5 flex items-center gap-1">
                         {row.card_number && (
@@ -542,8 +549,8 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                     <Lock className="h-5 w-5 text-muted" />
                   </div>
                   <div className="px-2 py-1.5">
-                    <p className="truncate text-xs text-muted" title={row.player_name}>
-                      {row.player_name}
+                    <p className="truncate text-xs text-muted" title={displayLabel(row)}>
+                      {displayLabel(row)}
                     </p>
                     <div className="mt-0.5 flex items-center gap-1">
                       {row.card_number && (

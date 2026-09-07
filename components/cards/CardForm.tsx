@@ -13,6 +13,7 @@ import { CARD_SETS, CONDITIONS } from "@/lib/data/cardCatalog";
 import { useParallelsForSet } from "@/lib/hooks/useParallelsForSet";
 import { parallelLabel, titleCase } from "@/lib/utils/text";
 import { buildTokenOrFilters, tokenizeSearch } from "@/lib/utils/search";
+import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
 import type {
   Card,
   CardCatalogEntry,
@@ -162,6 +163,11 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
 
   const [catalogMatches, setCatalogMatches] = useState<CatalogMatch[]>([]);
   const [showMatches, setShowMatches] = useState(false);
+  // Display label per match id — the insert/card name instead of the raw
+  // player_name for a real multi-player card (e.g. "AFC REC Leaders"), so a
+  // result you found by typing one of its players is still recognizable in
+  // the dropdown. See lib/utils/multiPlayerCard.ts.
+  const [matchDisplayLabels, setMatchDisplayLabels] = useState<Map<string, string>>(new Map());
   const [insertSetOptions, setInsertSetOptions] = useState<CardCatalogInsertSet[]>([]);
   const suppressLookup = useRef(Boolean(card));
   const suppressSetReset = useRef(Boolean(card));
@@ -231,6 +237,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     const tokens = tokenizeSearch(playerName);
     if (playerName.trim().length < 3 || tokens.length === 0) {
       setCatalogMatches([]);
+      setMatchDisplayLabels(new Map());
       return;
     }
 
@@ -256,8 +263,36 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
         .order("set_name")
         .order("card_number")
         .limit(CATALOG_SEARCH_RAW_LIMIT);
-      setCatalogMatches(pickDiverseMatches(data ?? []));
+      const diverse = pickDiverseMatches(data ?? []);
+      setCatalogMatches(diverse);
       setShowMatches(true);
+
+      // Multi-player detection: the search only matched rows containing
+      // the typed token(s), so a 3-player card's other two rows (which
+      // don't contain that token anywhere) never made it into `diverse` —
+      // a second, narrow lookup restricted to just the (set, insert,
+      // card number) combinations actually present in the results is
+      // enough to find them, without re-scanning the whole catalog.
+      const withInsert = diverse.filter((m) => m.insert_set && m.card_number);
+      if (withInsert.length === 0) {
+        setMatchDisplayLabels(new Map());
+      } else {
+        const setNames = Array.from(new Set(withInsert.map((m) => m.set_name)));
+        const insertSets = Array.from(new Set(withInsert.map((m) => m.insert_set as string)));
+        const cardNumbers = Array.from(new Set(withInsert.map((m) => m.card_number as string)));
+        const { data: siblingRows } = await supabase
+          .from("card_catalog")
+          .select("set_name, insert_set, card_number, player_name")
+          .in("set_name", setNames)
+          .in("insert_set", insertSets)
+          .in("card_number", cardNumbers);
+        const multiPlayerKeys = findMultiPlayerKeys(siblingRows ?? []);
+        const labels = new Map<string, string>();
+        for (const match of diverse) {
+          labels.set(match.id, catalogRowDisplayLabel(match, multiPlayerKeys));
+        }
+        setMatchDisplayLabels(labels);
+      }
     }, 300);
 
     return () => clearTimeout(timeout);
@@ -663,8 +698,11 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
                     className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-card"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-medium text-text" title={match.player_name}>
-                        {match.player_name}
+                      <span
+                        className="block truncate font-medium text-text"
+                        title={matchDisplayLabels.get(match.id) ?? match.player_name}
+                      >
+                        {matchDisplayLabels.get(match.id) ?? match.player_name}
                       </span>
                       <span className="block truncate text-xs text-muted" title={match.team ?? undefined}>
                         {match.team ?? "Team unknown"}

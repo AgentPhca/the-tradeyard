@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { insertOwnershipKey } from "@/lib/utils/checklist";
+import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
 import type { Card } from "@/lib/types/database";
 
 type PersonalYardMode = "team" | "player";
@@ -204,6 +205,44 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
 
   const rowsInSet = useMemo(() => rows.filter((row) => row.set_name === setName), [rows, setName]);
 
+  // Multi-player detection (e.g. "AFC REC Leaders") needs the OTHER
+  // players' rows too, but `rows` is already scoped to this one
+  // team/player — Ja'Marr Chase's and Zay Flowers' rows for the same
+  // 3-player card never show up in a Patriots-scoped TeamYard fetch, only
+  // Stefon Diggs' does. A second, narrow lookup restricted to just the
+  // (insert, card number) combinations actually present in the CURRENTLY
+  // VIEWED Set finds the co-featured players across every team — scoped
+  // to one Set at a time (not the whole team/player's slate across every
+  // set) both because that's all that's ever rendered at once and because
+  // it keeps the .in() cross-product bounded. See lib/utils/multiPlayerCard.ts.
+  const [multiPlayerKeys, setMultiPlayerKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const withInsert = rowsInSet.filter((row) => row.insert_set && row.card_number);
+    if (withInsert.length === 0) {
+      setMultiPlayerKeys(new Set());
+      return;
+    }
+
+    (async () => {
+      const insertSets = Array.from(new Set(withInsert.map((row) => row.insert_set as string)));
+      const cardNumbers = Array.from(new Set(withInsert.map((row) => row.card_number as string)));
+      const { data: siblingRows } = await supabase
+        .from("card_catalog")
+        .select("set_name, insert_set, card_number, player_name")
+        .eq("set_name", setName)
+        .in("insert_set", insertSets)
+        .in("card_number", cardNumbers);
+      if (!cancelled) setMultiPlayerKeys(findMultiPlayerKeys(siblingRows ?? []));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsInSet, setName]);
+  const displayLabel = (row: PersonalCatalogRow) => catalogRowDisplayLabel(row, multiPlayerKeys);
+
   const categoriesInSet = useMemo(() => {
     const present = new Set<PersonalYardCategory>();
     for (const row of rowsInSet) present.add(rowCategory(row));
@@ -347,7 +386,7 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
                       {ownedCardImageUrl ? (
                         <Image
                           src={ownedCardImageUrl}
-                          alt={`${row.player_name} card`}
+                          alt={`${displayLabel(row)} card`}
                           fill
                           sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
                           className="object-cover"
@@ -362,8 +401,8 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
                       </span>
                     </div>
                     <div className="px-2 py-1.5">
-                      <p className="truncate text-xs font-medium text-text" title={row.player_name}>
-                        {row.player_name}
+                      <p className="truncate text-xs font-medium text-text" title={displayLabel(row)}>
+                        {displayLabel(row)}
                       </p>
                       {row.card_number && <span className="text-[10px] text-muted">#{row.card_number}</span>}
                     </div>
@@ -380,8 +419,8 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
                     <Lock className="h-5 w-5 text-muted" />
                   </div>
                   <div className="px-2 py-1.5">
-                    <p className="truncate text-xs text-muted" title={row.player_name}>
-                      {row.player_name}
+                    <p className="truncate text-xs text-muted" title={displayLabel(row)}>
+                      {displayLabel(row)}
                     </p>
                     {row.card_number && <span className="text-[10px] text-muted">#{row.card_number}</span>}
                   </div>

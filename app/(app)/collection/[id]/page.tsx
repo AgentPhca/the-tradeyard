@@ -15,6 +15,7 @@ import { titleCase } from "@/lib/utils/text";
 import { allPhotos, coverPhoto } from "@/lib/utils/cardPhotos";
 import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
 import { getParallelFrameColor, parallelFrameBackground } from "@/lib/utils/parallelFrameColor";
+import { findMultiPlayerKeys, multiPlayerKey } from "@/lib/utils/multiPlayerCard";
 import type { Card } from "@/lib/types/database";
 
 // How many marketplace recommendations to aim for before falling back to
@@ -108,6 +109,36 @@ export default async function CardDetailPage({
   // unlike card_catalog.
   const year = card.set_name?.match(/^(\d{4})/)?.[1] ?? "—";
 
+  // Multi-player cards (e.g. "AFC REC Leaders") show the card/insert name
+  // as the primary heading instead of one arbitrary player from the
+  // group — see lib/utils/multiPlayerCard.ts. Every other card_catalog row
+  // sharing this exact (set_name, insert_set, card_number) slot is a
+  // co-featured player; only need their names here, not the full rows.
+  let otherPlayers: string[] = [];
+  if (card.set_name && card.insert_set && card.card_number) {
+    const { data: siblingRows } = await supabase
+      .from("card_catalog")
+      .select("player_name")
+      .eq("set_name", card.set_name)
+      .eq("insert_set", card.insert_set)
+      .eq("card_number", card.card_number);
+    const multiPlayerKeys = findMultiPlayerKeys(
+      (siblingRows ?? []).map((r) => ({
+        set_name: card.set_name!,
+        insert_set: card.insert_set,
+        card_number: card.card_number,
+        player_name: r.player_name,
+      }))
+    );
+    if (multiPlayerKeys.has(multiPlayerKey(card.set_name, card.insert_set, card.card_number))) {
+      otherPlayers = Array.from(
+        new Set((siblingRows ?? []).map((r) => r.player_name).filter((name) => name !== card.player_name))
+      );
+    }
+  }
+  const isMultiPlayer = otherPlayers.length > 0;
+  const displayName = isMultiPlayer ? titleCase(card.insert_set!) : card.player_name;
+
   const descriptionFields: { label: string; value: string }[] = [
     { label: "Jahr", value: year },
     { label: "Set", value: card.set_name ?? "—" },
@@ -116,6 +147,7 @@ export default async function CardDetailPage({
     { label: "Team", value: card.team ?? "—" },
     { label: "Rookie Card", value: card.is_rookie ? "Ja" : "Nein" },
     { label: "Zustand", value: card.condition ?? "—" },
+    ...(isMultiPlayer ? [{ label: "Mitspieler", value: otherPlayers.join(", ") }] : []),
   ];
 
   // "Also in your collection" — the owner's other own cards of the same
@@ -207,7 +239,7 @@ export default async function CardDetailPage({
             style={{ background: frameBackground }}
           >
             <div className="relative h-full w-full overflow-hidden rounded-[10px] bg-surface">
-              <CardPhotoGallery images={allPhotos(card)} alt={`${card.player_name} card`} />
+              <CardPhotoGallery images={allPhotos(card)} alt={`${displayName} card`} />
               <span
                 className={`absolute left-2 top-2 z-10 inline-flex items-center rounded-md px-2 py-1 text-[10px] font-semibold ${
                   traded
@@ -226,7 +258,7 @@ export default async function CardDetailPage({
         <div className="flex-1">
           <div className="flex flex-wrap items-baseline gap-2">
             <h1 className="font-display text-[26px] uppercase leading-none tracking-wide text-text">
-              {card.player_name}
+              {displayName}
             </h1>
             {card.card_number && (
               <span className="font-display whitespace-nowrap text-[15px] font-medium text-muted">
