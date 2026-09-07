@@ -22,6 +22,8 @@ export type Profile = {
   show_personal_collection: boolean;
   show_baseyard_publicly: boolean;
   show_insertyard_publicly: boolean;
+  personal_yard_type: "player" | "team" | null;
+  personal_yard_value: string | null;
   created_at: string;
 };
 
@@ -91,6 +93,12 @@ export type Wishlist = {
   parallel: string | null;
   notes: string | null;
   created_at: string;
+};
+
+export type CardOfTheWeek = {
+  week_start_date: string;
+  card_id: string | null;
+  computed_at: string;
 };
 
 export type SavedCard = {
@@ -281,6 +289,20 @@ export interface Database {
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      card_of_the_week: {
+        Row: CardOfTheWeek;
+        Insert: Partial<CardOfTheWeek> & Pick<CardOfTheWeek, "week_start_date">;
+        Update: Partial<CardOfTheWeek>;
+        Relationships: [
+          {
+            foreignKeyName: "card_of_the_week_card_id_fkey";
+            columns: ["card_id"];
+            isOneToOne: false;
+            referencedRelation: "cards";
             referencedColumns: ["id"];
           },
         ];

@@ -12,7 +12,14 @@ import { isValidPreviewAccessToken, PREVIEW_ACCESS_COOKIE } from "@/lib/preview-
 //   content itself, so gating it would just strand a legitimate signup
 // - /robots.txt, so crawlers can actually fetch the disallow-all response
 //   instead of being redirected to an HTML gate page
-const PREVIEW_GATE_EXCLUDED_PATHS = ["/preview-access", "/auth/callback", "/robots.txt"];
+// - /api/cron, hit by Vercel Cron directly (no browser, no preview-access
+//   cookie) — it has its own CRON_SECRET bearer-token check instead
+const PREVIEW_GATE_EXCLUDED_PATHS = [
+  "/preview-access",
+  "/auth/callback",
+  "/robots.txt",
+  "/api/cron",
+];
 
 function isExcludedFromPreviewGate(pathname: string): boolean {
   return PREVIEW_GATE_EXCLUDED_PATHS.some(

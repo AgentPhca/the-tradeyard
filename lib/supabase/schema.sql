@@ -51,6 +51,11 @@ create table public.profiles (
   -- checklist progress). Independent of both other visibility flags.
   -- See insertyard_public_visibility.sql.
   show_insertyard_publicly boolean not null default false,
+  -- Dashboard "Personal Yard": a pinned favorite player or team the app
+  -- builds a one-off checklist yard out of (see personal_yard.sql). Both
+  -- null means not configured yet.
+  personal_yard_type text check (personal_yard_type in ('player', 'team')),
+  personal_yard_value text,
   created_at timestamptz not null default now()
 );
 
@@ -333,6 +338,24 @@ create table public.wishlist (
 );
 
 create index wishlist_user_id_idx on public.wishlist (user_id);
+
+-- ----------------------------------------------------------------------------
+-- card_of_the_week
+-- Weekly cache for the Dashboard hero slide, computed by a Vercel Cron job
+-- rather than on every page view (see card_of_the_week.sql for details).
+-- ----------------------------------------------------------------------------
+create table public.card_of_the_week (
+  week_start_date date primary key,
+  card_id uuid references public.cards (id) on delete set null,
+  computed_at timestamptz not null default now()
+);
+
+alter table public.card_of_the_week enable row level security;
+
+create policy "Card of the week is viewable by authenticated users"
+  on public.card_of_the_week for select
+  to authenticated
+  using (true);
 
 -- ----------------------------------------------------------------------------
 -- saved_cards

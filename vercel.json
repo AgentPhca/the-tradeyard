@@ -3,5 +3,11 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "devCommand": "next dev",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/card-of-the-week",
+      "schedule": "5 0 * * 1"
+    }
+  ]
 }
