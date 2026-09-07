@@ -23,6 +23,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        // Condensed display face for the Card Detail page's player name.
+        display: ["var(--font-oswald)", "system-ui", "sans-serif"],
       },
     },
   },

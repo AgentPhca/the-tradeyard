@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PenLine, Shirt } from "lucide-react";
+import { Hash, PenLine, Shirt } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BackButton } from "@/components/collection/BackButton";
+import { CardDescriptionAccordion } from "@/components/collection/CardDescriptionAccordion";
 import { CardDetailActions } from "@/components/collection/CardDetailActions";
 import { CardPhotoGallery } from "@/components/cards/CardPhotoGallery";
 import { CollectionCardTile } from "@/components/cards/CollectionCardTile";
@@ -12,12 +14,44 @@ import { createClient } from "@/lib/supabase/server";
 import { titleCase } from "@/lib/utils/text";
 import { allPhotos, coverPhoto } from "@/lib/utils/cardPhotos";
 import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
+import { getParallelFrameColor, parallelFrameBackground } from "@/lib/utils/parallelFrameColor";
 import type { Card } from "@/lib/types/database";
 
 // How many marketplace recommendations to aim for before falling back to
 // the next priority source, and the hard cap on how many end up on screen.
 const RECOMMENDATION_TARGET = 6;
 const RECOMMENDATION_MAX = 12;
+
+// One of the three Attribute icon badges in the meta-strip — grayed out
+// when the attribute doesn't apply. This muted-instead-of-omitted
+// treatment is deliberately only used here on the Card Detail page; every
+// other card tile in the app (grid, Sticker Album, Marketplace, this same
+// page's own mini-cards) keeps just omitting attributes that don't apply.
+function AttrIcon({ active, icon: Icon, title }: { active: boolean; icon: LucideIcon; title: string }) {
+  return (
+    <div
+      title={title}
+      className={`flex h-7 w-7 items-center justify-center rounded-md border ${
+        active
+          ? "border-[#E8B94A]/40 bg-[#3A2E12] text-[#E8B94A]"
+          : "border-border bg-surface text-border"
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </div>
+  );
+}
+
+// "Refractor", "Cosmic /50", "Base" — the parallel name if set, else the
+// insert set name, else plain "Base", with the print run appended when
+// there is one. Shared between the meta-strip's "Typ" value and the
+// accordion's "Insert / Parallel" field so the two never disagree.
+function typeLabel(card: Pick<Card, "parallel" | "insert_set" | "print_run">): string {
+  const withPrintRun = (name: string) => (card.print_run != null ? `${name} /${card.print_run}` : name);
+  if (card.parallel) return withPrintRun(card.parallel);
+  if (card.insert_set) return withPrintRun(titleCase(card.insert_set));
+  return "Base";
+}
 
 export default async function CardDetailPage({
   params,
@@ -60,19 +94,29 @@ export default async function CardDetailPage({
 
   const forTrade = card.status === "for_trade";
   const traded = card.status === "traded";
-  const serial =
-    card.serial_number && card.print_run
-      ? `${card.serial_number}/${card.print_run}`
-      : card.serial_number ?? (card.print_run ? `/${card.print_run}` : null);
 
-  const details: { label: string; value: string }[] = [
-    { label: "Card Number", value: card.card_number ? `#${card.card_number}` : "" },
-    { label: "Set", value: card.set_name ?? "" },
-    { label: "Insert Set", value: card.insert_set ? titleCase(card.insert_set) : "" },
-    { label: "Parallel", value: card.parallel ?? "" },
-    { label: "Numbered #", value: serial ?? "" },
-    { label: "Condition", value: card.condition ?? "" },
-  ].filter((row) => row.value);
+  // Photo frame: rotated only for a numbered card at Grail rarity
+  // (print_run <= 50), color derived purely from the parallel/insert name
+  // (no DB field — works automatically for every set/parallel).
+  const isGrail = card.print_run != null && card.print_run <= 50;
+  const frameBackground = parallelFrameBackground(
+    getParallelFrameColor(card.parallel || card.insert_set || "Base")
+  );
+
+  // Leading 4-digit year out of set_name (e.g. "2025 Topps Chrome Football"
+  // -> "2025") — cards has no separate product_year column of its own,
+  // unlike card_catalog.
+  const year = card.set_name?.match(/^(\d{4})/)?.[1] ?? "—";
+
+  const descriptionFields: { label: string; value: string }[] = [
+    { label: "Jahr", value: year },
+    { label: "Set", value: card.set_name ?? "—" },
+    { label: "Kartennummer", value: card.card_number ? `#${card.card_number}` : "—" },
+    { label: "Insert / Parallel", value: typeLabel(card) },
+    { label: "Team", value: card.team ?? "—" },
+    { label: "Rookie Card", value: card.is_rookie ? "Ja" : "Nein" },
+    { label: "Zustand", value: card.condition ?? "—" },
+  ];
 
   // "Also in your collection" — the owner's other own cards of the same
   // player. Filtering by team too (when known) avoids conflating two real
@@ -154,13 +198,18 @@ export default async function CardDetailPage({
     <div>
       <BackButton />
 
-      <div className="flex flex-col gap-8 lg:flex-row">
+      <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
         <div className="w-full lg:max-w-sm">
-          <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border border-border bg-surface">
-            <CardPhotoGallery images={allPhotos(card)} alt={`${card.player_name} card`} />
-            <div className="absolute right-2 top-2">
+          <div
+            className={`relative aspect-[3/4] w-full overflow-hidden rounded-2xl p-[5px] shadow-[0_14px_26px_-14px_rgba(0,0,0,0.6)] transition-transform ${
+              isGrail ? "-rotate-3" : ""
+            }`}
+            style={{ background: frameBackground }}
+          >
+            <div className="relative h-full w-full overflow-hidden rounded-[10px] bg-surface">
+              <CardPhotoGallery images={allPhotos(card)} alt={`${card.player_name} card`} />
               <span
-                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                className={`absolute left-2 top-2 z-10 inline-flex items-center rounded-md px-2 py-1 text-[10px] font-semibold ${
                   traded
                     ? "bg-[#30363D] text-muted"
                     : forTrade
@@ -175,45 +224,59 @@ export default async function CardDetailPage({
         </div>
 
         <div className="flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h1 className="text-2xl font-bold text-text">{card.player_name}</h1>
-              {card.team && <p className="mt-1 text-base text-muted">{card.team}</p>}
-            </div>
-            {(card.is_autograph || card.is_relic) && (
-              <div className="flex shrink-0 gap-2">
-                {card.is_autograph && (
-                  <span
-                    title="Autographed"
-                    className="flex items-center gap-1 text-xs text-primary"
-                  >
-                    <PenLine className="h-4 w-4" />
-                    Auto
-                  </span>
-                )}
-                {card.is_relic && (
-                  <span
-                    title="Relic / patch"
-                    className="flex items-center gap-1 text-xs text-primary"
-                  >
-                    <Shirt className="h-4 w-4" />
-                    Relic
-                  </span>
-                )}
-              </div>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h1 className="font-display text-[26px] uppercase leading-none tracking-wide text-text">
+              {card.player_name}
+            </h1>
+            {card.card_number && (
+              <span className="font-display whitespace-nowrap text-[15px] font-medium text-muted">
+                #{card.card_number}
+              </span>
             )}
           </div>
-
-          {details.length > 0 && (
-            <dl className="mt-6 divide-y divide-border rounded-lg border border-border">
-              {details.map((row) => (
-                <div key={row.label} className="flex items-center justify-between px-4 py-3 text-sm">
-                  <dt className="text-muted">{row.label}</dt>
-                  <dd className="font-medium text-text">{row.value}</dd>
-                </div>
-              ))}
-            </dl>
+          {card.team && <p className="mt-1.5 text-sm text-muted">{card.team}</p>}
+          {card.is_rookie && (
+            <span className="mt-3 inline-flex items-center rounded-md border border-[#E8B94A]/40 bg-[#3A2E12] px-2.5 py-1 text-[11.5px] font-semibold text-[#E8B94A]">
+              RC
+            </span>
           )}
+
+          <div className="mt-5 flex gap-4 border-t border-border pt-4 sm:gap-6">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Set</p>
+              <p className="mt-1 truncate text-sm font-semibold text-text" title={card.set_name ?? undefined}>
+                {card.set_name ?? "—"}
+              </p>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Typ</p>
+              <p className="mt-1 truncate text-sm font-semibold text-text" title={typeLabel(card)}>
+                {typeLabel(card)}
+              </p>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Attribute</p>
+              <div className="mt-1 flex gap-2">
+                <AttrIcon
+                  active={card.print_run != null}
+                  icon={Hash}
+                  title={card.print_run != null ? `Numbered /${card.print_run}` : "Not numbered"}
+                />
+                <AttrIcon
+                  active={card.is_autograph}
+                  icon={PenLine}
+                  title={card.is_autograph ? "Autographed" : "No autograph"}
+                />
+                <AttrIcon
+                  active={card.is_relic}
+                  icon={Shirt}
+                  title={card.is_relic ? "Relic / patch" : "No relic / patch"}
+                />
+              </div>
+            </div>
+          </div>
+
+          <CardDescriptionAccordion fields={descriptionFields} />
 
           <Link
             href={`/profile/${owner.username}`}
