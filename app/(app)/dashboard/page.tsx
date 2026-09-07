@@ -217,9 +217,9 @@ export default async function DashboardPage() {
 
   return (
     <div
-      className={`flex flex-col ${SECTION_GAP} min-[900px]:grid min-[900px]:grid-cols-[2.1fr_1fr] min-[900px]:items-start min-[900px]:gap-x-6`}
+      className={`flex min-w-0 flex-col ${SECTION_GAP} min-[900px]:grid min-[900px]:grid-cols-[2.1fr_1fr] min-[900px]:items-start min-[900px]:gap-x-6`}
     >
-      <div className="order-1 min-[900px]:col-start-1">
+      <div className="order-1 min-w-0 min-[900px]:col-start-1">
         <HeroSlider
           slides={[
             { key: "welcome", className: "bg-gradient-to-br from-primary/10 to-transparent", content: welcomeSlide },
@@ -237,21 +237,21 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="order-2 min-[900px]:order-1 min-[900px]:col-start-2">
+      <div className="order-2 min-w-0 min-[900px]:order-1 min-[900px]:col-start-2">
         <PlatformPulseTiles pulse={pulse} />
       </div>
 
-      <div className="order-3 min-[900px]:col-start-1">
+      <div className="order-3 min-w-0 min-[900px]:col-start-1">
         <MarketplaceFeedSection feed={marketplaceFeed} />
       </div>
 
       {matches.hasOwnActivity && (
-        <div className="order-4 min-[900px]:order-5 min-[900px]:col-start-1">
+        <div className="order-4 min-w-0 min-[900px]:order-5 min-[900px]:col-start-1">
           <MatchesCarousel matches={matches} />
         </div>
       )}
 
-      <div className="order-5 min-[900px]:order-4 min-[900px]:col-start-2">
+      <div className="order-5 min-w-0 min-[900px]:order-4 min-[900px]:col-start-2">
         <div>
           <div className="mb-3 flex items-baseline justify-between gap-2">
             <span className="text-base font-bold text-text">Deine Yards</span>
@@ -263,7 +263,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="order-6 min-[900px]:col-start-2">
+      <div className="order-6 min-w-0 min-[900px]:col-start-2">
         <div className="flex gap-2.5">
           <Link href="/collection" className="btn-primary flex-1">
             Collection
