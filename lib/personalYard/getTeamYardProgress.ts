@@ -7,20 +7,16 @@ export interface PersonalYardProgress {
   total: number;
 }
 
-// Minimal Personal Yard: a pinned favorite player or team gets treated as
-// its own one-off checklist across every card_catalog slot that mentions
-// them, using the exact same player+team+set(+insertSet)+cardNumber
-// ownership key BaseYard/InsertYard use — so "owned" here never disagrees
-// with what the interactive checklists would say. insertOwnershipKey
-// doubles as the Base-row key too (insert_set is just "" for those rows).
-export async function getPersonalYardProgress(
+// TeamYard: every card_catalog slot for this team that ISN'T a plain base
+// card — numbered/parallel, a real insert set, or autograph/relic. Same
+// is_variation_of_base=false exclusion BaseYard/InsertYard use (a
+// "TEAM CAMO VARIATION" row still carries category='Base' but a non-null
+// insert_set, so without this guard it would wrongly count as "non-base").
+export async function getTeamYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string,
-  type: "player" | "team",
-  value: string
+  team: string
 ): Promise<PersonalYardProgress> {
-  const column = type === "player" ? "player_name" : "team";
-
   const pageSize = 1000;
   const catalogRows: {
     set_name: string;
@@ -36,7 +32,9 @@ export async function getPersonalYardProgress(
     const { data } = await supabase
       .from("card_catalog")
       .select("set_name, insert_set, team, player_name, card_number")
-      .eq(column, value)
+      .eq("team", team)
+      .eq("is_variation_of_base", false)
+      .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true")
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];
@@ -51,7 +49,7 @@ export async function getPersonalYardProgress(
     .from("cards")
     .select("player_name, team, set_name, insert_set, card_number")
     .eq("owner_id", ownerId)
-    .eq(column, value)
+    .eq("team", team)
     .neq("status", "traded")
     .not("set_name", "is", null);
 

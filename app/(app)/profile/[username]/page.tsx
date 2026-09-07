@@ -9,16 +9,19 @@ import { RoleBadges } from "@/components/profile/RoleBadges";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
+import { PersonalYardAlbum } from "@/components/collection/PersonalYardAlbum";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicBaseYardProgress, type BaseYardSetProgress } from "@/lib/baseyard/getPublicBaseYardProgress";
 import { getPublicInsertYardProgress } from "@/lib/insertyard/getPublicInsertYardProgress";
+import { getTeamYardProgress } from "@/lib/personalYard/getTeamYardProgress";
+import { getPlayerYardProgress } from "@/lib/personalYard/getPlayerYardProgress";
 import type { Card, Wishlist } from "@/lib/types/database";
 
 // BaseYard/InsertYard are filtered out below unless the profile has opted
 // in (see show_baseyard_publicly/show_insertyard_publicly) — parallel to
 // "My Collection", not nested inside it, since Base/Insert cards no longer
 // show up in that tab at all.
-const ALL_TABS = [
+const BASE_TABS = [
   { key: "collection", label: "My Collection" },
   { key: "baseyard", label: "BaseYard" },
   { key: "insertyard", label: "InsertYard" },
@@ -27,7 +30,7 @@ const ALL_TABS = [
   { key: "looking", label: "Looking For" },
 ] as const;
 
-type TabKey = (typeof ALL_TABS)[number]["key"];
+type TabKey = (typeof BASE_TABS)[number]["key"] | "teamyard" | "playeryard";
 
 export default async function ProfilePage({
   params,
@@ -62,9 +65,24 @@ export default async function ProfilePage({
 
   const isOwnProfile = user?.id === profile.id;
 
+  // TeamYard/PlayerYard tabs only exist at all once a value is pinned —
+  // unlike BaseYard/InsertYard, which are always meaningful tabs (0%
+  // included) and are filtered purely by their visibility flag below.
+  const ALL_TABS: { key: TabKey; label: string }[] = [
+    ...BASE_TABS,
+    ...(profile.personal_team_yard
+      ? [{ key: "teamyard" as const, label: `TeamYard: ${profile.personal_team_yard}` }]
+      : []),
+    ...(profile.personal_player_yard
+      ? [{ key: "playeryard" as const, label: `PlayerYard: ${profile.personal_player_yard}` }]
+      : []),
+  ];
+
   const TABS = ALL_TABS.filter((t) => {
     if (t.key === "baseyard") return profile.show_baseyard_publicly;
     if (t.key === "insertyard") return profile.show_insertyard_publicly;
+    if (t.key === "teamyard") return profile.show_teamyard_publicly;
+    if (t.key === "playeryard") return profile.show_playeryard_publicly;
     return true;
   });
   const activeTab: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : "collection";
@@ -144,6 +162,10 @@ export default async function ProfilePage({
   let insertYardBySet: Awaited<ReturnType<typeof getPublicInsertYardProgress>>["bySet"] = [];
   let insertYardByInsertSet: Awaited<ReturnType<typeof getPublicInsertYardProgress>>["byInsertSet"] = [];
   let insertYardAlbumCards: Card[] = [];
+  let teamYardProgress = { owned: 0, total: 0 };
+  let teamYardAlbumCards: Card[] = [];
+  let playerYardProgress = { owned: 0, total: 0 };
+  let playerYardAlbumCards: Card[] = [];
 
   if (activeTab === "looking") {
     const { data } = await supabase
@@ -183,6 +205,35 @@ export default async function ProfilePage({
     const progress = await getPublicInsertYardProgress(supabase, profile.id);
     insertYardBySet = progress.bySet;
     insertYardByInsertSet = progress.byInsertSet;
+  } else if (activeTab === "teamyard" && profile.personal_team_yard) {
+    if (isOwnProfile) {
+      teamYardProgress = await getTeamYardProgress(supabase, profile.id, profile.personal_team_yard);
+    } else {
+      // Covered by the cards RLS policy's TeamYard clause (see
+      // personal_yards_public_visibility.sql).
+      const { data } = await supabase
+        .from("cards")
+        .select("*")
+        .eq("owner_id", profile.id)
+        .eq("team", profile.personal_team_yard)
+        .neq("status", "traded")
+        .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true");
+      teamYardAlbumCards = data ?? [];
+    }
+  } else if (activeTab === "playeryard" && profile.personal_player_yard) {
+    if (isOwnProfile) {
+      playerYardProgress = await getPlayerYardProgress(supabase, profile.id, profile.personal_player_yard);
+    } else {
+      // Covered by the cards RLS policy's PlayerYard clause (see
+      // personal_yards_public_visibility.sql).
+      const { data } = await supabase
+        .from("cards")
+        .select("*")
+        .eq("owner_id", profile.id)
+        .eq("player_name", profile.personal_player_yard)
+        .neq("status", "traded");
+      playerYardAlbumCards = data ?? [];
+    }
   } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
     const status =
       activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
@@ -462,6 +513,78 @@ export default async function ProfilePage({
                 );
               })}
             </div>
+          )
+        ) : activeTab === "teamyard" ? (
+          isOwnProfile ? (
+            <div className="rounded-lg border border-border bg-surface p-4">
+              <div className="mb-1.5 flex items-center justify-between text-sm">
+                <span className="font-medium text-text">{profile.personal_team_yard}</span>
+                <span className="text-muted">
+                  {teamYardProgress.total > 0
+                    ? Math.round((teamYardProgress.owned / teamYardProgress.total) * 100)
+                    : 0}
+                  %
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-card">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width]"
+                  style={{
+                    width: `${teamYardProgress.total > 0 ? Math.round((teamYardProgress.owned / teamYardProgress.total) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {teamYardProgress.owned} / {teamYardProgress.total} collected
+              </p>
+              <Link href="/collection?yard=teamyard" className="mt-3 inline-block text-sm text-primary hover:underline">
+                Zum interaktiven Album →
+              </Link>
+            </div>
+          ) : (
+            <PersonalYardAlbum
+              cards={teamYardAlbumCards}
+              targetUserId={profile.id}
+              readOnly
+              mode="team"
+              value={profile.personal_team_yard ?? ""}
+            />
+          )
+        ) : activeTab === "playeryard" ? (
+          isOwnProfile ? (
+            <div className="rounded-lg border border-border bg-surface p-4">
+              <div className="mb-1.5 flex items-center justify-between text-sm">
+                <span className="font-medium text-text">{profile.personal_player_yard}</span>
+                <span className="text-muted">
+                  {playerYardProgress.total > 0
+                    ? Math.round((playerYardProgress.owned / playerYardProgress.total) * 100)
+                    : 0}
+                  %
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-card">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width]"
+                  style={{
+                    width: `${playerYardProgress.total > 0 ? Math.round((playerYardProgress.owned / playerYardProgress.total) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {playerYardProgress.owned} / {playerYardProgress.total} collected
+              </p>
+              <Link href="/collection?yard=playeryard" className="mt-3 inline-block text-sm text-primary hover:underline">
+                Zum interaktiven Album →
+              </Link>
+            </div>
+          ) : (
+            <PersonalYardAlbum
+              cards={playerYardAlbumCards}
+              targetUserId={profile.id}
+              readOnly
+              mode="player"
+              value={profile.personal_player_yard ?? ""}
+            />
           )
         ) : cards.length === 0 ? (
           <>

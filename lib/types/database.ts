@@ -22,8 +22,10 @@ export type Profile = {
   show_personal_collection: boolean;
   show_baseyard_publicly: boolean;
   show_insertyard_publicly: boolean;
-  personal_yard_type: "player" | "team" | null;
-  personal_yard_value: string | null;
+  personal_team_yard: string | null;
+  personal_player_yard: string | null;
+  show_teamyard_publicly: boolean;
+  show_playeryard_publicly: boolean;
   created_at: string;
 };
 

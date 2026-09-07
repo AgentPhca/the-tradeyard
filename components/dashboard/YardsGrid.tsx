@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Layers, LayoutGrid, Plus, Shapes, Sparkles, Star } from "lucide-react";
+import { Layers, LayoutGrid, Plus, Shapes, Sparkles, Star, User, Users } from "lucide-react";
 import type { YardsSummary } from "@/lib/dashboard/getYardsSummary";
 
 interface YardsGridProps {
@@ -61,16 +61,18 @@ function CountTile({
   );
 }
 
-// "Deine Yards" — the 6-tile grid that replaced the old 4 flat stat
-// tiles. BaseYard/InsertYard are real per-set checklists so they get a %
-// bar; ValueYard/RookieYard/ParallelYard are plain filtered lists with no
-// fixed target size, so they're a count instead (see getYardsSummary.ts's
-// note on why ParallelYard in particular can't be a checklist %). Personal
-// Yard has no dedicated /collection view yet (see personal_yard.sql) —
-// its tile links to Edit Profile, where it's configured, rather than a
-// /collection filter that doesn't exist.
+// "Deine Yards" — the tile grid that replaced the old 4 flat stat tiles.
+// BaseYard/InsertYard are real per-set checklists so they get a % bar;
+// ValueYard/RookieYard/ParallelYard are plain filtered lists with no fixed
+// target size, so they're a count instead (see getYardsSummary.ts's note
+// on why ParallelYard in particular can't be a checklist %). TeamYard and
+// PlayerYard are independent — 0, 1, or 2 extra tiles depending on what's
+// configured; the dashed "+" setup tile only shows when neither is set
+// (once at least one exists, there's nothing left to "add" from here —
+// the other one, if wanted, is still just a field away in Edit Profile).
 export function YardsGrid({ summary, username }: YardsGridProps) {
   const profileEditHref = `/profile/${username}/edit`;
+  const hasAnyPersonalYard = Boolean(summary.teamYard || summary.playerYard);
 
   return (
     <div className="grid grid-cols-2 gap-2.5">
@@ -97,14 +99,18 @@ export function YardsGrid({ summary, username }: YardsGridProps) {
         count={summary.rookieYardCount}
         sub="Rookie Cards"
       />
-      {summary.personalYard ? (
+      {summary.teamYard && (
+        <ProgressTile href="/collection?yard=teamyard" icon={Users} label={summary.teamYard.value} pct={summary.teamYard.pct} />
+      )}
+      {summary.playerYard && (
         <ProgressTile
-          href={profileEditHref}
-          icon={Sparkles}
-          label={summary.personalYard.value}
-          pct={summary.personalYard.pct}
+          href="/collection?yard=playeryard"
+          icon={User}
+          label={summary.playerYard.value}
+          pct={summary.playerYard.pct}
         />
-      ) : (
+      )}
+      {!hasAnyPersonalYard && (
         <Link
           href={profileEditHref}
           className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border p-3 text-center text-xs font-semibold text-muted transition-colors hover:border-primary/40 hover:text-text"

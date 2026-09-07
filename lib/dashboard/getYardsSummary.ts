@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Profile } from "@/lib/types/database";
 import { getPublicBaseYardProgress } from "@/lib/baseyard/getPublicBaseYardProgress";
 import { getPublicInsertYardProgress } from "@/lib/insertyard/getPublicInsertYardProgress";
-import { getPersonalYardProgress } from "@/lib/personalYard/getPersonalYardProgress";
+import { getTeamYardProgress } from "@/lib/personalYard/getTeamYardProgress";
+import { getPlayerYardProgress } from "@/lib/personalYard/getPlayerYardProgress";
 
 export interface PercentYard {
   owned: number;
@@ -16,15 +17,22 @@ export interface HighestCompletionSet {
   pct: number;
 }
 
+export interface PersonalYardSummary {
+  value: string;
+  owned: number;
+  total: number;
+  pct: number;
+}
+
 export interface YardsSummary {
   baseYard: PercentYard;
   insertYard: PercentYard;
   valueYardCount: number;
   rookieYardCount: number;
   parallelYardCount: number;
-  personalYard:
-    | { type: "player" | "team"; value: string; owned: number; total: number; pct: number }
-    | null;
+  // Independent — both, either, or neither can be set at once.
+  teamYard: PersonalYardSummary | null;
+  playerYard: PersonalYardSummary | null;
   // The single highest-% set across the two checklist-style yards, for the
   // Dashboard hero's "Willkommen" slide — ParallelYard has no per-set
   // checklist data to compare against (see getYardsSummary's own note
@@ -43,7 +51,7 @@ function pct(owned: number, total: number): number {
 export async function getYardsSummary(
   supabase: SupabaseClient<Database>,
   ownerId: string,
-  profile: Pick<Profile, "personal_yard_type" | "personal_yard_value">
+  profile: Pick<Profile, "personal_team_yard" | "personal_player_yard">
 ): Promise<YardsSummary> {
   const [baseYardBySet, insertYardResult, { data: ownedCards }] = await Promise.all([
     getPublicBaseYardProgress(supabase, ownerId),
@@ -74,17 +82,22 @@ export async function getYardsSummary(
   const rookieYardCount = cards.filter((c) => c.is_rookie).length;
   const parallelYardCount = cards.filter((c) => c.parallel != null).length;
 
-  let personalYard: YardsSummary["personalYard"] = null;
-  if (profile.personal_yard_type && profile.personal_yard_value) {
-    const progress = await getPersonalYardProgress(
-      supabase,
-      ownerId,
-      profile.personal_yard_type,
-      profile.personal_yard_value
-    );
-    personalYard = {
-      type: profile.personal_yard_type,
-      value: profile.personal_yard_value,
+  let teamYard: YardsSummary["teamYard"] = null;
+  if (profile.personal_team_yard) {
+    const progress = await getTeamYardProgress(supabase, ownerId, profile.personal_team_yard);
+    teamYard = {
+      value: profile.personal_team_yard,
+      owned: progress.owned,
+      total: progress.total,
+      pct: pct(progress.owned, progress.total),
+    };
+  }
+
+  let playerYard: YardsSummary["playerYard"] = null;
+  if (profile.personal_player_yard) {
+    const progress = await getPlayerYardProgress(supabase, ownerId, profile.personal_player_yard);
+    playerYard = {
+      value: profile.personal_player_yard,
       owned: progress.owned,
       total: progress.total,
       pct: pct(progress.owned, progress.total),
@@ -108,7 +121,8 @@ export async function getYardsSummary(
     valueYardCount,
     rookieYardCount,
     parallelYardCount,
-    personalYard,
+    teamYard,
+    playerYard,
     highestCompletionSet,
   };
 }

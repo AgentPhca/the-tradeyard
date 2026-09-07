@@ -2,15 +2,27 @@
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Gem, LayoutGrid, Layers, PenTool, Shapes, Sparkles, Star } from "lucide-react";
+import {
+  ArrowLeft,
+  Gem,
+  LayoutGrid,
+  Layers,
+  PenTool,
+  Shapes,
+  Sparkles,
+  Star,
+  User,
+  Users,
+} from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
 import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
+import { PersonalYardAlbum } from "@/components/collection/PersonalYardAlbum";
 import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
-type YardKey = "rookie" | "base" | "insert" | "auto" | "grail" | "value" | "parallel";
+type YardKey = "rookie" | "base" | "insert" | "auto" | "grail" | "value" | "parallel" | "teamyard" | "playeryard";
 
 type SortKey = "recent" | "player" | "cardNumber" | "team";
 
@@ -138,15 +150,61 @@ interface CollectionBrowserProps {
   // that case too (see the early return below), so ChecklistAlbum never
   // actually mounts with it.
   currentUserId: string;
+  // Personal Yards — independent, either/both/neither can be set. Each
+  // adds its own hub tile + album when present (see personal_yards_independent.sql).
+  personalTeamYard: string | null;
+  personalPlayerYard: string | null;
 }
 
-export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserProps) {
+export function CollectionBrowser({
+  cards,
+  currentUserId,
+  personalTeamYard,
+  personalPlayerYard,
+}: CollectionBrowserProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // TeamYard/PlayerYard hub tiles only exist once configured, and their
+  // label needs the actual team/player name — can't be static YARDS
+  // entries the way the other 7 are, so they're built here instead and
+  // concatenated in wherever the full yard list is needed.
+  const personalYards: Yard[] = useMemo(() => {
+    const extra: Yard[] = [];
+    if (personalTeamYard) {
+      extra.push({
+        key: "teamyard",
+        label: `TeamYard: ${personalTeamYard}`,
+        description: `${personalTeamYard} cards that aren't plain Base`,
+        icon: Users,
+        test: (c) =>
+          c.team === personalTeamYard &&
+          (c.parallel != null || (c.insert_set != null && c.category !== "Base") || c.is_autograph || c.is_relic),
+        badgeClass: "bg-orange-500/10 text-orange-400",
+        tileBorderClass: "border-border",
+        isAlbum: true,
+      });
+    }
+    if (personalPlayerYard) {
+      extra.push({
+        key: "playeryard",
+        label: `PlayerYard: ${personalPlayerYard}`,
+        description: `Every ${personalPlayerYard} card — Base, Insert, or Parallel`,
+        icon: User,
+        test: (c) => c.player_name === personalPlayerYard,
+        badgeClass: "bg-cyan-500/10 text-cyan-400",
+        tileBorderClass: "border-border",
+        isAlbum: true,
+      });
+    }
+    return extra;
+  }, [personalTeamYard, personalPlayerYard]);
+
+  const allYards = useMemo(() => [...YARDS, ...personalYards], [personalYards]);
+
   const yardParam = searchParams.get("yard");
-  const activeYard = YARDS.find((y) => y.key === yardParam) ?? null;
+  const activeYard = allYards.find((y) => y.key === yardParam) ?? null;
 
   function setYard(key: YardKey | null) {
     const params = new URLSearchParams(searchParams.toString());
@@ -214,11 +272,11 @@ export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserPro
 
   const yardCounts = useMemo(() => {
     const counts = new Map<YardKey, number>();
-    for (const yard of YARDS) {
+    for (const yard of allYards) {
       counts.set(yard.key, filterBarCards.filter(yard.test).length);
     }
     return counts;
-  }, [filterBarCards]);
+  }, [filterBarCards, allYards]);
 
   // Base cards are BaseYard's own thing now (a checklist-completion game,
   // not a "card in my collection" in the usual sense) — they only show up
@@ -297,7 +355,7 @@ export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserPro
         </div>
       ) : (
         <div className="mb-4 flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-          {YARDS.map((yard) => (
+          {allYards.map((yard) => (
             <button
               key={yard.key}
               type="button"
@@ -334,6 +392,13 @@ export function CollectionBrowser({ cards, currentUserId }: CollectionBrowserPro
         // pickers), and it needs every owned card, not just whatever the
         // filter bar would have narrowed to.
         <ChecklistAlbum cards={cards} targetUserId={currentUserId} mode={activeYard.key} />
+      ) : activeYard?.key === "teamyard" || activeYard?.key === "playeryard" ? (
+        <PersonalYardAlbum
+          cards={cards}
+          targetUserId={currentUserId}
+          mode={activeYard.key === "teamyard" ? "team" : "player"}
+          value={(activeYard.key === "teamyard" ? personalTeamYard : personalPlayerYard) ?? ""}
+        />
       ) : (
         <>
           <div className="mb-6 rounded-lg border border-border bg-surface p-4">

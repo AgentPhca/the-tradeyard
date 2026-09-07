@@ -14,6 +14,8 @@ export default async function CollectionPage() {
 
   let cards: Card[] = [];
   let showPersonalCollection = false;
+  let personalTeamYard: string | null = null;
+  let personalPlayerYard: string | null = null;
   if (user) {
     const [{ data: cardData }, { data: profile }] = await Promise.all([
       supabase
@@ -22,10 +24,16 @@ export default async function CollectionPage() {
         .eq("owner_id", user.id)
         .neq("status", "traded")
         .order("created_at", { ascending: false }),
-      supabase.from("profiles").select("show_personal_collection").eq("id", user.id).single(),
+      supabase
+        .from("profiles")
+        .select("show_personal_collection, personal_team_yard, personal_player_yard")
+        .eq("id", user.id)
+        .single(),
     ]);
     cards = cardData ?? [];
     showPersonalCollection = profile?.show_personal_collection ?? false;
+    personalTeamYard = profile?.personal_team_yard ?? null;
+    personalPlayerYard = profile?.personal_player_yard ?? null;
   }
 
   return (
@@ -47,7 +55,12 @@ export default async function CollectionPage() {
       </div>
 
       <Suspense fallback={null}>
-        <CollectionBrowser cards={cards} currentUserId={user?.id ?? ""} />
+        <CollectionBrowser
+          cards={cards}
+          currentUserId={user?.id ?? ""}
+          personalTeamYard={personalTeamYard}
+          personalPlayerYard={personalPlayerYard}
+        />
       </Suspense>
     </div>
   );

@@ -66,19 +66,19 @@ export default async function DashboardPage() {
   const [{ data: profile }, { count: ownCardCount }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("username, personal_yard_type, personal_yard_value")
+      .select("username, personal_team_yard, personal_player_yard")
       .eq("id", user.id)
       .single(),
     supabase.from("cards").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
   ]);
 
   const username = profile?.username ?? "collector";
-  const favoriteTeam = profile?.personal_yard_type === "team" ? profile.personal_yard_value : null;
+  const favoriteTeam = profile?.personal_team_yard ?? null;
 
   const [yardsSummary, marketplaceFeed, matches, cardOfTheWeek] = await Promise.all([
     getYardsSummary(supabase, user.id, {
-      personal_yard_type: profile?.personal_yard_type ?? null,
-      personal_yard_value: profile?.personal_yard_value ?? null,
+      personal_team_yard: profile?.personal_team_yard ?? null,
+      personal_player_yard: profile?.personal_player_yard ?? null,
     }),
     getMarketplaceFeed(supabase, user.id, favoriteTeam),
     getMatches(supabase, user.id),
@@ -136,14 +136,24 @@ export default async function DashboardPage() {
   );
 
   // --- Slide 2: Personal Yard ---
-  const personalYardSlide = yardsSummary.personalYard ? (
+  // Both Team and Player Yard can exist at once now — the slide picks
+  // whichever has the LOWER completion %, since that one has more room to
+  // motivate further collecting than an already-nearly-done yard would.
+  const personalYardCandidate =
+    yardsSummary.teamYard && yardsSummary.playerYard
+      ? yardsSummary.teamYard.pct <= yardsSummary.playerYard.pct
+        ? yardsSummary.teamYard
+        : yardsSummary.playerYard
+      : yardsSummary.teamYard ?? yardsSummary.playerYard;
+
+  const personalYardSlide = personalYardCandidate ? (
     <>
-      <ProgressRing pct={yardsSummary.personalYard.pct} />
+      <ProgressRing pct={personalYardCandidate.pct} />
       <div className="min-w-0 flex-1">
-        <h2 className="font-display text-xl font-bold leading-tight text-text">{yardsSummary.personalYard.value}</h2>
+        <h2 className="font-display text-xl font-bold leading-tight text-text">{personalYardCandidate.value}</h2>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
-          Dein Personal Yard ist zu <b className="text-text">{yardsSummary.personalYard.pct}%</b> fertig (
-          {yardsSummary.personalYard.owned}/{yardsSummary.personalYard.total} Karten).
+          Dein Personal Yard ist zu <b className="text-text">{personalYardCandidate.pct}%</b> fertig (
+          {personalYardCandidate.owned}/{personalYardCandidate.total} Karten).
         </p>
       </div>
     </>

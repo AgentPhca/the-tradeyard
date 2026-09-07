@@ -9,7 +9,9 @@ import type { Profile } from "@/lib/types/database";
 type VisibilityField =
   | "show_personal_collection"
   | "show_baseyard_publicly"
-  | "show_insertyard_publicly";
+  | "show_insertyard_publicly"
+  | "show_teamyard_publicly"
+  | "show_playeryard_publicly";
 
 interface VisibilityToggleProps {
   profileId: string;
@@ -27,6 +29,8 @@ const DEFAULT_LABEL: Record<VisibilityField, string> = {
   show_personal_collection: "Personal Collection",
   show_baseyard_publicly: "BaseYard",
   show_insertyard_publicly: "InsertYard",
+  show_teamyard_publicly: "TeamYard",
+  show_playeryard_publicly: "PlayerYard",
 };
 
 // The one place that writes either visibility column. Every on-page toggle

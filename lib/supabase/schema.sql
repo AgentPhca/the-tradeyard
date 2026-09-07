@@ -51,11 +51,15 @@ create table public.profiles (
   -- checklist progress). Independent of both other visibility flags.
   -- See insertyard_public_visibility.sql.
   show_insertyard_publicly boolean not null default false,
-  -- Dashboard "Personal Yard": a pinned favorite player or team the app
-  -- builds a one-off checklist yard out of (see personal_yard.sql). Both
-  -- null means not configured yet.
-  personal_yard_type text check (personal_yard_type in ('player', 'team')),
-  personal_yard_value text,
+  -- Personal Yards: a pinned favorite team and/or favorite player, each
+  -- independently settable (see personal_yards_independent.sql) — a user
+  -- can have both, either, or neither at once. Each gets its own
+  -- checklist-style album (team+non-base, or player+everything) and its
+  -- own public-visibility opt-in, same convention as show_baseyard_publicly.
+  personal_team_yard text,
+  personal_player_yard text,
+  show_teamyard_publicly boolean not null default false,
+  show_playeryard_publicly boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -424,8 +428,10 @@ create policy "Users can delete their own profile"
 -- card is only visible to its owner unless that owner has opted in via
 -- profiles.show_personal_collection — or, for Base-category cards
 -- specifically, via profiles.show_baseyard_publicly, or for Insert-Set
--- cards specifically, via profiles.show_insertyard_publicly (the public
--- Base/InsertYard sections on a profile need to read a user's
+-- cards specifically, via profiles.show_insertyard_publicly, or for a
+-- card matching their pinned TeamYard/PlayerYard, via
+-- show_teamyard_publicly/show_playeryard_publicly (the public Base/
+-- Insert/Team/PlayerYard sections on a profile need to read a user's
 -- personal_collection cards even when their general collection stays
 -- private).
 create policy "Cards are viewable respecting personal collection and yard privacy"
@@ -455,6 +461,21 @@ create policy "Cards are viewable respecting personal collection and yard privac
         where p.id = cards.owner_id
           and p.show_insertyard_publicly = true
       )
+    )
+    or (
+      (parallel is not null or insert_set is not null or is_autograph = true or is_relic = true)
+      and exists (
+        select 1 from public.profiles p
+        where p.id = cards.owner_id
+          and p.show_teamyard_publicly = true
+          and p.personal_team_yard = cards.team
+      )
+    )
+    or exists (
+      select 1 from public.profiles p
+      where p.id = cards.owner_id
+        and p.show_playeryard_publicly = true
+        and p.personal_player_yard = cards.player_name
     )
   );
 

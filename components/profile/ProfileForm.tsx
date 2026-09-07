@@ -5,10 +5,15 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Camera } from "lucide-react";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/client";
+import { NFL_TEAMS } from "@/lib/data/nflTeams";
+import { buildTokenOrFilters, tokenizeSearch } from "@/lib/utils/search";
 import { ROLE_LABEL, SELECTABLE_ROLES } from "@/lib/utils/roles";
 import type { Profile, UserRole } from "@/lib/types/database";
+
+const PLAYER_SEARCH_MAX_RESULTS = 12;
 
 interface ProfileFormProps {
   profile: Profile;
@@ -32,12 +37,44 @@ export function ProfileForm({ profile }: ProfileFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [teamYard, setTeamYard] = useState(profile.personal_team_yard ?? "");
+  const [playerYard, setPlayerYard] = useState(profile.personal_player_yard ?? "");
+  const [playerYardMatches, setPlayerYardMatches] = useState<string[]>([]);
+  const [showPlayerYardMatches, setShowPlayerYardMatches] = useState(false);
+
   useEffect(() => {
     return () => {
       if (avatar && avatarPreview) URL.revokeObjectURL(avatarPreview);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [avatarPreview]);
+
+  // Debounced player-name search against the card catalog, same
+  // token-substring matching CardForm's own player search uses — but
+  // simpler, since a Personal Yard just needs an existing player_name
+  // string, not a specific printed card to prefill from.
+  useEffect(() => {
+    const tokens = tokenizeSearch(playerYard);
+    if (playerYard.trim().length < 3 || tokens.length === 0) {
+      setPlayerYardMatches([]);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      let query = supabase.from("card_catalog").select("player_name").limit(300);
+      for (const filter of buildTokenOrFilters(tokens, ["player_name"])) {
+        query = query.or(filter);
+      }
+      const { data } = await query;
+      const distinct = Array.from(new Set((data ?? []).map((row) => row.player_name))).sort((a, b) =>
+        a.localeCompare(b)
+      );
+      setPlayerYardMatches(distinct.slice(0, PLAYER_SEARCH_MAX_RESULTS));
+    }, 300);
+
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerYard]);
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
@@ -95,6 +132,8 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         instagram_url: instagramUrl || null,
         ebay_url: ebayUrl || null,
         avatar_url: avatarUrl,
+        personal_team_yard: teamYard || null,
+        personal_player_yard: playerYard || null,
       })
       .eq("id", profile.id);
 
@@ -295,6 +334,77 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             When on, a separate &ldquo;InsertYard&rdquo; section appears on your public
             profile showing your Insert Set completion progress — independent of the
             settings above.
+          </p>
+        </div>
+
+        <div className="rounded-md border border-border bg-surface p-4">
+          <p className="mb-3 text-sm font-medium text-text">Personal Yards</p>
+
+          <div className="mb-4">
+            <label htmlFor="teamYard" className="mb-1.5 block text-sm font-medium text-text">
+              Team
+            </label>
+            <Select id="teamYard" value={teamYard} onChange={(e) => setTeamYard(e.target.value)}>
+              <option value="">— Kein Team —</option>
+              {NFL_TEAMS.map((team) => (
+                <option key={team} value={team}>
+                  {team}
+                </option>
+              ))}
+            </Select>
+            <div className="mt-2">
+              <VisibilityToggle
+                profileId={profile.id}
+                initialValue={profile.show_teamyard_publicly}
+                field="show_teamyard_publicly"
+              />
+            </div>
+          </div>
+
+          <div className="relative">
+            <label htmlFor="playerYard" className="mb-1.5 block text-sm font-medium text-text">
+              Spieler
+            </label>
+            <Input
+              id="playerYard"
+              autoComplete="off"
+              value={playerYard}
+              onChange={(e) => setPlayerYard(e.target.value)}
+              onFocus={() => playerYardMatches.length > 0 && setShowPlayerYardMatches(true)}
+              onBlur={() => setTimeout(() => setShowPlayerYardMatches(false), 150)}
+              placeholder="Spielername suchen..."
+            />
+            {showPlayerYardMatches && playerYardMatches.length > 0 && (
+              <ul className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
+                {playerYardMatches.map((name) => (
+                  <li key={name}>
+                    <button
+                      type="button"
+                      onMouseDown={() => {
+                        setPlayerYard(name);
+                        setShowPlayerYardMatches(false);
+                      }}
+                      className="block w-full truncate px-3 py-2 text-left text-sm text-text hover:bg-card"
+                      title={name}
+                    >
+                      {name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-2">
+              <VisibilityToggle
+                profileId={profile.id}
+                initialValue={profile.show_playeryard_publicly}
+                field="show_playeryard_publicly"
+              />
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-muted">
+            Ein TeamYard oder PlayerYard baut dir ein eigenes Stickeralbum aus dem Katalog —
+            beide unabhängig voneinander, du kannst auch beide gleichzeitig setzen.
           </p>
         </div>
 

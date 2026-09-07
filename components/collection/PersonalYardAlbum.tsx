@@ -1,0 +1,420 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Check, ImageOff, Lock } from "lucide-react";
+import { Select } from "@/components/ui/Select";
+import { createClient } from "@/lib/supabase/client";
+import { coverPhoto } from "@/lib/utils/cardPhotos";
+import { insertOwnershipKey } from "@/lib/utils/checklist";
+import type { Card } from "@/lib/types/database";
+
+type PersonalYardMode = "team" | "player";
+type PersonalYardCategory = "Base" | "Insert" | "Value" | "Parallel";
+
+// Only the columns the category derivation + ownership key need.
+interface PersonalCatalogRow {
+  id: string;
+  set_name: string;
+  team: string | null;
+  player_name: string;
+  card_number: string | null;
+  insert_set: string | null;
+  parallel: string | null;
+  is_autograph: boolean;
+  is_relic: boolean;
+  category: string | null;
+}
+
+// A catalog row's bucket within its Set, in priority order: a named
+// parallel wins over everything else (rare in practice today — real
+// catalog data almost never carries `parallel`, see parallelFrameColor.ts's
+// own note on this — but still the correct rule if it ever does); an
+// autograph/relic row is "Value" regardless of category (mirrors
+// ValueYard's own definition); a real insert set (category<>'Base', same
+// null-safe check InsertYard's own catalog query uses) is "Insert";
+// everything else is "Base".
+function rowCategory(row: PersonalCatalogRow): PersonalYardCategory {
+  if (row.parallel) return "Parallel";
+  if (row.is_autograph || row.is_relic) return "Value";
+  if (row.insert_set && row.category !== "Base") return "Insert";
+  return "Base";
+}
+
+const CATEGORY_ORDER: PersonalYardCategory[] = ["Base", "Insert", "Value", "Parallel"];
+
+const lockedPatternStyle = {
+  backgroundImage:
+    "repeating-linear-gradient(45deg, rgba(139,148,158,0.08) 0px, rgba(139,148,158,0.08) 6px, transparent 6px, transparent 12px)",
+};
+
+const tileInactiveClass = "border-border bg-surface text-muted hover:border-primary/40 hover:text-text";
+const tileSelectedClass = "border-primary/30 bg-primary/10 text-primary";
+
+interface PersonalYardAlbumProps {
+  cards: Card[];
+  targetUserId: string;
+  readOnly?: boolean;
+  // "team": TeamYard — every non-base catalog slot for this team (parallel/
+  // insert/autograph/relic — see the catalog query below). "player":
+  // PlayerYard — every catalog slot for this player, no restriction at all.
+  mode: PersonalYardMode;
+  value: string;
+}
+
+// TeamYard/PlayerYard's own sticker album — same paginated
+// catalog-fetch-plus-ownership-overlay approach as ChecklistAlbum
+// (BaseYard/InsertYard), but grouped Set -> category (Base/Insert/Value/
+// Parallel) instead of Set -> Division/Team or Set -> Insert Set, since
+// neither Team nor Player scopes to one grouping dimension the way the
+// other two yards do. Kept as its own component rather than a third
+// ChecklistAlbum mode: the grouping shape is different enough (and
+// "category" here is derived from catalog-row attributes, not a single
+// column) that forcing it through ChecklistAlbum's base/insert branching
+// would touch nearly every line of that component for no shared benefit.
+export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode, value }: PersonalYardAlbumProps) {
+  const supabase = createClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const ownCards = useMemo(() => {
+    const scoped = cards.filter((c) => c.owner_id === targetUserId);
+    return mode === "team" ? scoped.filter((c) => c.team === value) : scoped.filter((c) => c.player_name === value);
+  }, [cards, targetUserId, mode, value]);
+
+  // Distinct param names per mode+level (a user can have a TeamYard and a
+  // PlayerYard active in different tabs/links at once, so they can't share
+  // one param namespace any more than baseSet/insertYardSet do).
+  const setParamKey = mode === "team" ? "teamYardSet" : "playerYardSet";
+  const categoryParamKey = mode === "team" ? "teamYardCategory" : "playerYardCategory";
+
+  const urlSet = searchParams.get(setParamKey) ?? "";
+  const urlCategory = (searchParams.get(categoryParamKey) ?? "") as PersonalYardCategory | "";
+
+  const [rows, setRows] = useState<PersonalCatalogRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [setName, setSetName] = useState(urlSet);
+  const [category, setCategory] = useState<PersonalYardCategory | "">(urlCategory);
+  const [defaultSetPicked, setDefaultSetPicked] = useState(Boolean(urlSet));
+
+  function updateAlbumParams(updates: Record<string, string>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, val] of Object.entries(updates)) {
+      if (val) params.set(key, val);
+      else params.delete(key);
+    }
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname, { scroll: false });
+  }
+
+  // Fetched once per mode+value — see ChecklistAlbum for why .range()
+  // chunking (not a single large .limit()) is required.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const pageSize = 1000;
+      const allRows: PersonalCatalogRow[] = [];
+      let from = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let query = supabase
+          .from("card_catalog")
+          .select(
+            "id, set_name, team, player_name, card_number, insert_set, parallel, is_autograph, is_relic, category"
+          )
+          .eq(mode === "team" ? "team" : "player_name", value);
+
+        if (mode === "team") {
+          // Non-base only. is_variation_of_base=false excludes photo
+          // variation rows (e.g. "TEAM CAMO VARIATION") that still carry
+          // category='Base' but a non-null insert_set — without it they'd
+          // wrongly count as "non-base" here, the same trap InsertYard's
+          // own catalog query guards against.
+          query = query
+            .eq("is_variation_of_base", false)
+            .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true");
+        }
+        // player mode: no further restriction — "alles" by design.
+
+        const { data } = await query
+          .order("set_name")
+          .order("player_name")
+          .order("card_number")
+          .range(from, from + pageSize - 1);
+
+        const page = data ?? [];
+        allRows.push(...page);
+        if (cancelled || page.length < pageSize) break;
+        from += pageSize;
+      }
+
+      if (!cancelled) {
+        setRows(allRows);
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, value]);
+
+  const setOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const row of rows) seen.add(row.set_name);
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
+  // Default to the set already owned the most in, same convention as
+  // ChecklistAlbum.
+  useEffect(() => {
+    if (defaultSetPicked || setOptions.length === 0) return;
+
+    const ownedCountBySet = new Map<string, number>();
+    for (const c of ownCards) {
+      if (!c.set_name) continue;
+      ownedCountBySet.set(c.set_name, (ownedCountBySet.get(c.set_name) ?? 0) + 1);
+    }
+
+    const bestOwned = setOptions
+      .map((s) => ({ set: s, owned: ownedCountBySet.get(s) ?? 0 }))
+      .sort((a, b) => b.owned - a.owned)[0];
+
+    setSetName(bestOwned && bestOwned.owned > 0 ? bestOwned.set : setOptions[0]);
+    setDefaultSetPicked(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setOptions, defaultSetPicked]);
+
+  function handleSetChange(next: string) {
+    setSetName(next);
+    setCategory("");
+    updateAlbumParams({ [setParamKey]: next, [categoryParamKey]: "" });
+  }
+
+  function handleCategoryClick(next: PersonalYardCategory) {
+    const nextValue = category === next ? "" : next;
+    setCategory(nextValue);
+    updateAlbumParams({ [setParamKey]: setName, [categoryParamKey]: nextValue });
+  }
+
+  const rowsInSet = useMemo(() => rows.filter((row) => row.set_name === setName), [rows, setName]);
+
+  const categoriesInSet = useMemo(() => {
+    const present = new Set<PersonalYardCategory>();
+    for (const row of rowsInSet) present.add(rowCategory(row));
+    return CATEGORY_ORDER.filter((c) => present.has(c));
+  }, [rowsInSet]);
+
+  const ownedByKey = useMemo(() => {
+    const map = new Map<string, Card>();
+    for (const c of ownCards) {
+      if (!c.set_name) continue;
+      const key = insertOwnershipKey(c.player_name, c.team, c.set_name, c.insert_set ?? "", c.card_number);
+      if (!map.has(key)) map.set(key, c);
+    }
+    return map;
+  }, [ownCards]);
+
+  const categoryCompletion = useMemo(() => {
+    const map = new Map<PersonalYardCategory, { owned: number; total: number }>();
+    for (const row of rowsInSet) {
+      const cat = rowCategory(row);
+      const entry = map.get(cat) ?? { owned: 0, total: 0 };
+      entry.total += 1;
+      const key = insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
+      if (ownedByKey.has(key)) entry.owned += 1;
+      map.set(cat, entry);
+    }
+    return map;
+  }, [rowsInSet, ownedByKey]);
+
+  function isCategoryComplete(cat: PersonalYardCategory) {
+    const entry = categoryCompletion.get(cat);
+    return Boolean(entry && entry.total > 0 && entry.owned === entry.total);
+  }
+
+  function findOwnedCard(row: PersonalCatalogRow) {
+    const key = insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
+    return ownedByKey.get(key);
+  }
+
+  const checklist = useMemo(() => {
+    if (!category) return [];
+    return rowsInSet.filter((row) => rowCategory(row) === category);
+  }, [rowsInSet, category]);
+
+  const ownedCount = useMemo(
+    () => checklist.filter((row) => findOwnedCard(row)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [checklist, ownedByKey]
+  );
+  const progressPct = checklist.length > 0 ? Math.round((ownedCount / checklist.length) * 100) : 0;
+
+  if (loading) {
+    return <p className="text-sm text-muted">Loading checklist...</p>;
+  }
+
+  if (setOptions.length === 0) {
+    return <p className="text-sm text-muted">No checklist data is available yet for {value}.</p>;
+  }
+
+  return (
+    <div>
+      <div className="mb-4">
+        <label htmlFor="personalYardSet" className="mb-1.5 block text-sm font-medium text-text">
+          Set
+        </label>
+        <Select id="personalYardSet" value={setName} onChange={(e) => handleSetChange(e.target.value)}>
+          {setOptions.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      <div className="mb-4">
+        <label className="mb-1.5 block text-sm font-medium text-text">Kategorie</label>
+        {categoriesInSet.length === 0 ? (
+          <p className="text-sm text-muted">No cards found for this set.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {categoriesInSet.map((cat) => {
+              const selected = category === cat;
+              const complete = isCategoryComplete(cat);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => handleCategoryClick(cat)}
+                  className={`relative flex min-h-11 items-center justify-center rounded-md border px-2 py-1.5 text-center text-[11px] font-medium leading-tight transition-colors sm:text-xs ${
+                    selected ? tileSelectedClass : tileInactiveClass
+                  }`}
+                >
+                  {cat}
+                  {complete && (
+                    <span
+                      title="100% collected"
+                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                    >
+                      <Check className="h-2.5 w-2.5" />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {!category ? (
+        <p className="text-sm text-muted">Select a category above to see its checklist.</p>
+      ) : (
+        <>
+          <div className="mb-4">
+            <div className="mb-1.5 flex items-center justify-between text-sm">
+              <span className="text-text">
+                {ownedCount} / {checklist.length} collected
+              </span>
+              <span className="text-muted">{progressPct}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-surface">
+              <div
+                className="h-full rounded-full bg-primary transition-[width]"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+            {checklist.map((row) => {
+              const ownedCard = findOwnedCard(row);
+
+              if (ownedCard) {
+                const ownedCardImageUrl = coverPhoto(ownedCard);
+                return (
+                  <Link
+                    key={row.id}
+                    href={`/collection/${ownedCard.id}`}
+                    className="flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40"
+                  >
+                    <div className="relative aspect-[5/7] w-full bg-surface">
+                      {ownedCardImageUrl ? (
+                        <Image
+                          src={ownedCardImageUrl}
+                          alt={`${row.player_name} card`}
+                          fill
+                          sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <ImageOff className="h-6 w-6 text-muted" />
+                        </div>
+                      )}
+                      <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    </div>
+                    <div className="px-2 py-1.5">
+                      <p className="truncate text-xs font-medium text-text" title={row.player_name}>
+                        {row.player_name}
+                      </p>
+                      {row.card_number && <span className="text-[10px] text-muted">#{row.card_number}</span>}
+                    </div>
+                  </Link>
+                );
+              }
+
+              const lockedTileContent = (
+                <>
+                  <div
+                    className="flex aspect-[5/7] w-full items-center justify-center"
+                    style={lockedPatternStyle}
+                  >
+                    <Lock className="h-5 w-5 text-muted" />
+                  </div>
+                  <div className="px-2 py-1.5">
+                    <p className="truncate text-xs text-muted" title={row.player_name}>
+                      {row.player_name}
+                    </p>
+                    {row.card_number && <span className="text-[10px] text-muted">#{row.card_number}</span>}
+                  </div>
+                </>
+              );
+
+              if (readOnly) {
+                return (
+                  <div
+                    key={row.id}
+                    className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface"
+                  >
+                    {lockedTileContent}
+                  </div>
+                );
+              }
+
+              const addCardParam = mode === "team" ? "personalTeam" : "personalPlayer";
+              const addCardHref = `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&${addCardParam}=${encodeURIComponent(value)}`;
+
+              return (
+                <Link
+                  key={row.id}
+                  href={addCardHref}
+                  className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
+                >
+                  {lockedTileContent}
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
