@@ -311,7 +311,12 @@ export function CollectionBrowser({
     return sorted;
   }, [filteredCards, sort]);
 
-  if (cards.length === 0) {
+  // A configured TeamYard/PlayerYard is a checklist-completion tile (like
+  // BaseYard/InsertYard) whose whole point is showing 0/N progress on a
+  // freshly-set yard — it must still render even with zero owned cards, so
+  // the "empty collection" state can only take over when there's truly
+  // nothing to show at all.
+  if (cards.length === 0 && personalYards.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
         <Layers className="h-8 w-8 text-muted" />

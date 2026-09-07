@@ -70,6 +70,11 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         a.localeCompare(b)
       );
       setPlayerYardMatches(distinct.slice(0, PLAYER_SEARCH_MAX_RESULTS));
+      // CardForm's equivalent search does this too (see selectCatalogMatch's
+      // sibling effect) — without it, the dropdown never (re-)opens once new
+      // async matches land, since onFocus only flips it on for whatever
+      // matches already existed at focus time (typically none yet).
+      setShowPlayerYardMatches(true);
     }, 300);
 
     return () => clearTimeout(timeout);
@@ -95,6 +100,28 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     if (roles.length === 0) {
       setError("Select at least one role.");
       return;
+    }
+
+    const trimmedPlayerYard = playerYard.trim();
+    if (trimmedPlayerYard) {
+      // playerYard is freetext (typed, or picked from the search dropdown),
+      // not a constrained <select> like teamYard — validate it matches a
+      // real card_catalog player before saving, so a typo or an
+      // unconfirmed in-progress search term never silently becomes an
+      // unmatchable PlayerYard (0 owned/0 total forever).
+      const { data: playerMatch } = await supabase
+        .from("card_catalog")
+        .select("player_name")
+        .eq("player_name", trimmedPlayerYard)
+        .limit(1)
+        .maybeSingle();
+
+      if (!playerMatch) {
+        setError(
+          `"${trimmedPlayerYard}" wurde nicht im Katalog gefunden — bitte einen Namen aus den Vorschlägen auswählen.`
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -133,7 +160,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
         ebay_url: ebayUrl || null,
         avatar_url: avatarUrl,
         personal_team_yard: teamYard || null,
-        personal_player_yard: playerYard || null,
+        personal_player_yard: trimmedPlayerYard || null,
       })
       .eq("id", profile.id);
 
