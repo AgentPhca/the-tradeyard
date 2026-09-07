@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Store } from "lucide-react";
+import { Plus, Store } from "lucide-react";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { MarketplaceFilters } from "@/components/marketplace/MarketplaceFilters";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
@@ -159,6 +159,15 @@ export default async function MarketplacePage({
           </Link>
         ))}
       </div>
+
+      {tab === "looking" && user && (
+        <div className="mb-4 flex justify-end">
+          <Link href="/wishlist?tab=looking" className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Add Looking For
+          </Link>
+        </div>
+      )}
 
       <Suspense fallback={null}>
         <MarketplaceFilters />
