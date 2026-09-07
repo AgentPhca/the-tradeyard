@@ -4,10 +4,8 @@ import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
-  Gem,
   LayoutGrid,
   Layers,
-  PenTool,
   Shapes,
   Sparkles,
   Star,
@@ -22,7 +20,7 @@ import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
 import type { Card } from "@/lib/types/database";
 
-type YardKey = "rookie" | "base" | "insert" | "auto" | "grail" | "value" | "parallel" | "teamyard" | "playeryard";
+type YardKey = "rookie" | "base" | "insert" | "value" | "parallel" | "teamyard" | "playeryard";
 
 type SortKey = "recent" | "player" | "cardNumber" | "team";
 
@@ -32,11 +30,6 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "cardNumber", label: "Card number" },
   { value: "team", label: "Team" },
 ];
-
-// SuperFractors/1-of-1s and other short print runs are what "grail" means
-// to a collector — any relic/patch card counts too, regardless of print
-// run, since a memorabilia card is inherently a chase card even unnumbered.
-const GRAIL_PRINT_RUN_MAX = 50;
 
 interface Yard {
   key: YardKey;
@@ -91,33 +84,14 @@ const YARDS: Yard[] = [
     isAlbum: true,
   },
   {
-    key: "auto",
-    label: "AutoYard",
-    description: "Autographed cards",
-    icon: PenTool,
-    test: (c) => c.is_autograph,
-    badgeClass: "bg-violet-500/10 text-violet-400",
-    tileBorderClass: "border-border",
-  },
-  {
-    key: "grail",
-    label: "GrailYard",
-    description: `Your rarest pulls · print run < ${GRAIL_PRINT_RUN_MAX} or relic/patch`,
-    icon: Gem,
-    test: (c) => (c.print_run != null && c.print_run < GRAIL_PRINT_RUN_MAX) || c.is_relic,
-    // GrailYard is the "special" one — a distinct amber/gold accent on the
-    // tile border itself, not just the icon badge, sets it apart from the
-    // other three.
-    badgeClass: "bg-amber-500/10 text-amber-400",
-    tileBorderClass: "border-amber-500/30",
-  },
-  {
     key: "value",
     label: "ValueYard",
     description: "Numbered, autographed, or relic/patch cards",
     icon: Star,
-    // Same "not a plain base card" rule as the Dashboard's ValueYard tile
-    // and the Card of the Week cron's candidate filter.
+    // Yards-Konzept v2: ValueYard absorbs the old AutoYard/GrailYard split
+    // into one yard — any numbered, autographed, or relic/patch card, with
+    // no lower bound on print run. Same rule as the Dashboard's ValueYard
+    // tile and the Card of the Week cron's candidate filter.
     test: (c) => c.print_run != null || c.is_autograph || c.is_relic,
     badgeClass: "bg-[#3A2E12] text-[#E8B94A]",
     tileBorderClass: "border-border",
@@ -283,9 +257,9 @@ export function CollectionBrowser({
   // in the default grid's own dedicated yard, not mixed into the general
   // list. Insert cards stay in the default grid (InsertYard is its own
   // checklist view, but an Insert-category card is still "in the
-  // collection" too). RookieYard/AutoYard/GrailYard are unaffected: their
-  // test() functions don't look at category, so a card that happens to
-  // also be a rookie/autograph/grail still shows up there.
+  // collection" too). RookieYard/ValueYard/ParallelYard are unaffected:
+  // their test() functions don't look at category, so a card that happens
+  // to also be a rookie/numbered/autograph/relic still shows up there.
   const filteredCards = useMemo(() => {
     if (!activeYard) {
       return filterBarCards.filter((c) => c.category !== "Base");
