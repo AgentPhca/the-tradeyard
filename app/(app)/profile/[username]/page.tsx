@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Camera, Globe, Pencil, Plus, Radio, ShoppingBag, Tag } from "lucide-react";
+import { Camera, Globe, Pencil, Plus, Radio, ShoppingBag, Tag, User, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { TradingCard } from "@/components/cards/TradingCard";
 import { FollowButton } from "@/components/profile/FollowButton";
@@ -22,15 +22,16 @@ import type { Card, Wishlist } from "@/lib/types/database";
 // "My Collection", not nested inside it, since Base/Insert cards no longer
 // show up in that tab at all.
 const BASE_TABS = [
-  { key: "collection", label: "My Collection" },
-  { key: "baseyard", label: "BaseYard" },
-  { key: "insertyard", label: "InsertYard" },
-  { key: "trade", label: "For Trade" },
-  { key: "traded", label: "Traded" },
-  { key: "looking", label: "Looking For" },
+  { key: "collection", label: "My Collection", group: "Collection" },
+  { key: "baseyard", label: "BaseYard", group: "Collection" },
+  { key: "insertyard", label: "InsertYard", group: "Collection" },
+  { key: "trade", label: "For Trade", group: "Marktplatz" },
+  { key: "traded", label: "Traded", group: "Marktplatz" },
+  { key: "looking", label: "Looking For", group: "Marktplatz" },
 ] as const;
 
 type TabKey = (typeof BASE_TABS)[number]["key"] | "teamyard" | "playeryard";
+type TabGroup = "Collection" | "Marktplatz";
 
 export default async function ProfilePage({
   params,
@@ -67,14 +68,15 @@ export default async function ProfilePage({
 
   // TeamYard/PlayerYard tabs only exist at all once a value is pinned —
   // unlike BaseYard/InsertYard, which are always meaningful tabs (0%
-  // included) and are filtered purely by their visibility flag below.
-  const ALL_TABS: { key: TabKey; label: string }[] = [
+  // included) and are filtered purely by their visibility flag below. Both
+  // group into "Collection", alongside BaseYard/InsertYard.
+  const ALL_TABS: { key: TabKey; label: string; group: TabGroup }[] = [
     ...BASE_TABS,
     ...(profile.personal_team_yard
-      ? [{ key: "teamyard" as const, label: `TeamYard: ${profile.personal_team_yard}` }]
+      ? [{ key: "teamyard" as const, label: profile.personal_team_yard, group: "Collection" as const }]
       : []),
     ...(profile.personal_player_yard
-      ? [{ key: "playeryard" as const, label: `PlayerYard: ${profile.personal_player_yard}` }]
+      ? [{ key: "playeryard" as const, label: profile.personal_player_yard, group: "Collection" as const }]
       : []),
   ];
 
@@ -162,10 +164,29 @@ export default async function ProfilePage({
   let insertYardBySet: Awaited<ReturnType<typeof getPublicInsertYardProgress>>["bySet"] = [];
   let insertYardByInsertSet: Awaited<ReturnType<typeof getPublicInsertYardProgress>>["byInsertSet"] = [];
   let insertYardAlbumCards: Card[] = [];
-  let teamYardProgress = { owned: 0, total: 0 };
   let teamYardAlbumCards: Card[] = [];
-  let playerYardProgress = { owned: 0, total: 0 };
   let playerYardAlbumCards: Card[] = [];
+
+  // Overall progress across every set — used by both the header badges
+  // (shown on any tab) and the owner's own TeamYard/PlayerYard tab body.
+  // Gated the same way the tabs themselves are: always visible to the
+  // owner, otherwise only once the matching show_*_publicly flag is on —
+  // the RLS policies backing these queries (personal_yards_public_
+  // visibility.sql) enforce the identical rule at the database level, so a
+  // visitor's query naturally returns nothing extra even if this check
+  // were ever bypassed.
+  const showTeamYardBadge = Boolean(profile.personal_team_yard) && (isOwnProfile || profile.show_teamyard_publicly);
+  const showPlayerYardBadge =
+    Boolean(profile.personal_player_yard) && (isOwnProfile || profile.show_playeryard_publicly);
+
+  const [teamYardProgress, playerYardProgress] = await Promise.all([
+    showTeamYardBadge
+      ? getTeamYardProgress(supabase, profile.id, profile.personal_team_yard!)
+      : Promise.resolve({ owned: 0, total: 0 }),
+    showPlayerYardBadge
+      ? getPlayerYardProgress(supabase, profile.id, profile.personal_player_yard!)
+      : Promise.resolve({ owned: 0, total: 0 }),
+  ]);
 
   if (activeTab === "looking") {
     const { data } = await supabase
@@ -205,35 +226,29 @@ export default async function ProfilePage({
     const progress = await getPublicInsertYardProgress(supabase, profile.id);
     insertYardBySet = progress.bySet;
     insertYardByInsertSet = progress.byInsertSet;
-  } else if (activeTab === "teamyard" && profile.personal_team_yard) {
-    if (isOwnProfile) {
-      teamYardProgress = await getTeamYardProgress(supabase, profile.id, profile.personal_team_yard);
-    } else {
-      // Covered by the cards RLS policy's TeamYard clause (see
-      // personal_yards_public_visibility.sql).
-      const { data } = await supabase
-        .from("cards")
-        .select("*")
-        .eq("owner_id", profile.id)
-        .eq("team", profile.personal_team_yard)
-        .neq("status", "traded")
-        .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true");
-      teamYardAlbumCards = data ?? [];
-    }
-  } else if (activeTab === "playeryard" && profile.personal_player_yard) {
-    if (isOwnProfile) {
-      playerYardProgress = await getPlayerYardProgress(supabase, profile.id, profile.personal_player_yard);
-    } else {
-      // Covered by the cards RLS policy's PlayerYard clause (see
-      // personal_yards_public_visibility.sql).
-      const { data } = await supabase
-        .from("cards")
-        .select("*")
-        .eq("owner_id", profile.id)
-        .eq("player_name", profile.personal_player_yard)
-        .neq("status", "traded");
-      playerYardAlbumCards = data ?? [];
-    }
+  } else if (activeTab === "teamyard" && profile.personal_team_yard && !isOwnProfile) {
+    // Covered by the cards RLS policy's TeamYard clause (see
+    // personal_yards_public_visibility.sql). teamYardProgress (for the
+    // owner's own progress bar) is already computed above.
+    const { data } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("owner_id", profile.id)
+      .eq("team", profile.personal_team_yard)
+      .neq("status", "traded")
+      .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true");
+    teamYardAlbumCards = data ?? [];
+  } else if (activeTab === "playeryard" && profile.personal_player_yard && !isOwnProfile) {
+    // Covered by the cards RLS policy's PlayerYard clause (see
+    // personal_yards_public_visibility.sql). playerYardProgress (for the
+    // owner's own progress bar) is already computed above.
+    const { data } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("owner_id", profile.id)
+      .eq("player_name", profile.personal_player_yard)
+      .neq("status", "traded");
+    playerYardAlbumCards = data ?? [];
   } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
     const status =
       activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
@@ -319,6 +334,49 @@ export default async function ProfilePage({
               unratedTradeIds={unratedTradeIds}
             />
           </div>
+
+          {(showTeamYardBadge || showPlayerYardBadge) && (
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {showTeamYardBadge && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-primary/35 bg-[#14532D] py-1.5 pl-2 pr-2.5 text-xs">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-primary/20 text-primary">
+                    <Users className="h-3 w-3" />
+                  </span>
+                  <span className="leading-tight">
+                    <span className="block text-[9.5px] font-bold uppercase tracking-wide text-primary/75">
+                      TeamYard
+                    </span>
+                    <span className="font-semibold text-text">{profile.personal_team_yard}</span>
+                    <span className="ml-0.5 text-[11px] font-bold text-primary">
+                      {teamYardProgress.total > 0
+                        ? Math.round((teamYardProgress.owned / teamYardProgress.total) * 100)
+                        : 0}
+                      %
+                    </span>
+                  </span>
+                </div>
+              )}
+              {showPlayerYardBadge && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-[#E8B94A]/35 bg-[#3A2E12] py-1.5 pl-2 pr-2.5 text-xs">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-[#E8B94A]/20 text-[#E8B94A]">
+                    <User className="h-3 w-3" />
+                  </span>
+                  <span className="leading-tight">
+                    <span className="block text-[9.5px] font-bold uppercase tracking-wide text-[#E8B94A]/75">
+                      PlayerYard
+                    </span>
+                    <span className="font-semibold text-text">{profile.personal_player_yard}</span>
+                    <span className="ml-0.5 text-[11px] font-bold text-[#E8B94A]">
+                      {playerYardProgress.total > 0
+                        ? Math.round((playerYardProgress.owned / playerYardProgress.total) * 100)
+                        : 0}
+                      %
+                    </span>
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -340,20 +398,60 @@ export default async function ProfilePage({
       </div>
 
       <div className="mt-8">
-        <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border no-scrollbar">
-          {TABS.map((t) => (
-            <Link
-              key={t.key}
-              href={`/profile/${profile.username}?tab=${t.key}`}
-              className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === t.key
-                  ? "border-b-2 border-primary text-text"
-                  : "text-muted hover:text-text"
-              }`}
-            >
-              {t.label}
-            </Link>
-          ))}
+        <div className="mb-6 flex flex-col gap-4">
+          {(["Collection", "Marktplatz"] as const).map((group) => {
+            const groupTabs = TABS.filter((t) => t.group === group);
+            if (groupTabs.length === 0) return null;
+            return (
+              <div key={group}>
+                <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-muted">{group}</p>
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                  {groupTabs.map((t) => {
+                    const active = activeTab === t.key;
+                    if (t.key === "teamyard" || t.key === "playeryard") {
+                      const isTeam = t.key === "teamyard";
+                      return (
+                        <Link
+                          key={t.key}
+                          href={`/profile/${profile.username}?tab=${t.key}`}
+                          className={`min-w-[112px] shrink-0 rounded-md border py-1.5 pl-2.5 pr-3 leading-tight ${
+                            isTeam ? "border-l-[3px] border-l-primary" : "border-l-[3px] border-l-[#E8B94A]"
+                          } ${active ? "border-text bg-card" : "border-border bg-surface"}`}
+                        >
+                          <span
+                            className={`block text-[9.5px] font-bold uppercase tracking-wide ${
+                              isTeam ? "text-primary" : "text-[#E8B94A]"
+                            }`}
+                          >
+                            {isTeam ? "TeamYard" : "PlayerYard"}
+                          </span>
+                          <span
+                            className="block max-w-[160px] truncate text-[12.5px] font-semibold text-text"
+                            title={t.label}
+                          >
+                            {t.label}
+                          </span>
+                        </Link>
+                      );
+                    }
+                    return (
+                      <Link
+                        key={t.key}
+                        href={`/profile/${profile.username}?tab=${t.key}`}
+                        className={`shrink-0 whitespace-nowrap rounded-md border px-3 py-2 text-[12.5px] font-semibold transition-colors ${
+                          active
+                            ? "border-text bg-card text-text"
+                            : "border-border bg-surface text-muted hover:text-text"
+                        }`}
+                      >
+                        {t.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {activeTab === "looking" ? (
