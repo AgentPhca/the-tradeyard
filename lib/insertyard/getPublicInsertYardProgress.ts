@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database";
 import { insertOwnershipKey } from "@/lib/utils/checklist";
+import { findMultiPlayerKeys, groupIntoSlots } from "@/lib/utils/multiPlayerCard";
 
 export interface InsertYardSetProgress {
   setName: string;
@@ -37,6 +38,7 @@ export async function getPublicInsertYardProgress(
   // as much a trackable checklist as a plain Insert one.
   const pageSize = 1000;
   const catalogRows: {
+    id: string;
     set_name: string;
     team: string | null;
     player_name: string;
@@ -49,7 +51,7 @@ export async function getPublicInsertYardProgress(
   while (true) {
     const { data } = await supabase
       .from("card_catalog")
-      .select("set_name, team, player_name, insert_set, card_number")
+      .select("id, set_name, team, player_name, insert_set, card_number")
       .or("category.is.null,category.neq.Base")
       .eq("is_variation_of_base", false)
       .range(from, from + pageSize - 1);
@@ -61,6 +63,16 @@ export async function getPublicInsertYardProgress(
   }
 
   if (catalogRows.length === 0) return { bySet: [], byInsertSet: [] };
+
+  // A multi-player insert (e.g. "AFC Rec Leaders") stores one catalog row
+  // per co-featured player, all sharing (set_name, insert_set,
+  // card_number) — grouped into one slot here too, same as
+  // ChecklistAlbum's interactive album, so this summary's totals/owned
+  // counts agree with what the album actually shows (10 slots for League
+  // Leaders, not 30 raw rows) and a card added under any one of the
+  // co-featured players' names counts the slot as owned.
+  const multiPlayerKeys = findMultiPlayerKeys(catalogRows);
+  const slots = groupIntoSlots(catalogRows, multiPlayerKeys);
 
   const { data: ownedCards } = await supabase
     .from("cards")
@@ -85,11 +97,14 @@ export async function getPublicInsertYardProgress(
   const pairOwned = new Map<string, number>();
   const pairInfo = new Map<string, { setName: string; insertSet: string }>();
 
-  for (const row of catalogRows) {
+  for (const slot of slots) {
+    const row = slot.rows[0];
     const insertSet = row.insert_set!;
     const pairKey = `${row.set_name}|${insertSet}`;
-    const isOwned = ownedKeys.has(
-      insertOwnershipKey(row.player_name, row.team, row.set_name, insertSet, row.card_number)
+    // A multi-player slot counts as owned if ANY of its co-featured
+    // players' rows matches an owned card — see groupIntoSlots above.
+    const isOwned = slot.rows.some((r) =>
+      ownedKeys.has(insertOwnershipKey(r.player_name, r.team, r.set_name, r.insert_set!, r.card_number))
     );
 
     setTotals.set(row.set_name, (setTotals.get(row.set_name) ?? 0) + 1);

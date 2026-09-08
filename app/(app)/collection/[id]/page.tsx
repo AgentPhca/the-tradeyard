@@ -145,7 +145,7 @@ export default async function CardDetailPage({
     }
   }
   const isMultiPlayer = otherPlayers.length > 0;
-  const displayName = isMultiPlayer ? titleCase(card.insert_set!) : card.player_name;
+  const displayName = isMultiPlayer ? titleCase(card.card_title || card.insert_set!) : card.player_name;
 
   const descriptionFields: { label: string; value: string }[] = [
     { label: "Jahr", value: year },

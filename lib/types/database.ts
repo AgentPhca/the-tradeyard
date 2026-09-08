@@ -37,6 +37,13 @@ export type Card = {
   card_number: string | null;
   set_name: string | null;
   insert_set: string | null;
+  // The specific name printed on a multi-player insert card (e.g. "AFC Rec
+  // Leaders"), separate from insert_set — which holds the shared grouping
+  // bracket ("LEAGUE LEADERS") for a card like this. Null for every
+  // single-player card, and for multi-player inserts that predate this
+  // column (e.g. Paramount Pairings), which fall back to insert_set for
+  // display — see lib/utils/multiPlayerCard.ts.
+  card_title: string | null;
   is_variation_of_base: boolean;
   is_rookie: boolean;
   parallel: string | null;
@@ -136,6 +143,8 @@ export type CardCatalogEntry = {
   id: string;
   set_name: string;
   insert_set: string | null;
+  // See Card.card_title above — same field, same fallback rule.
+  card_title: string | null;
   parallel: string | null;
   player_name: string;
   team: string | null;

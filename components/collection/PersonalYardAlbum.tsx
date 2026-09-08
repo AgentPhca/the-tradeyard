@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { insertOwnershipKey } from "@/lib/utils/checklist";
-import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
+import { catalogRowDisplayLabel, findMultiPlayerKeys, groupIntoSlots, type RowSlot } from "@/lib/utils/multiPlayerCard";
 import { isInsert, isParallel } from "@/lib/utils/cardClassification";
 import type { Card } from "@/lib/types/database";
 
@@ -24,12 +24,32 @@ interface PersonalCatalogRow {
   player_name: string;
   card_number: string | null;
   insert_set: string | null;
+  card_title: string | null;
   parallel: string | null;
   is_variation_of_base: boolean;
   is_autograph: boolean;
   is_relic: boolean;
   print_run: number | null;
   category: string | null;
+}
+
+// One rendered tile: either a single catalog row, or — for a multi-player
+// card — every row sharing the same (set_name, insert_set, card_number),
+// grouped into one slot instead of one tile per co-featured player. See
+// groupIntoSlots in lib/utils/multiPlayerCard.ts (shared with
+// ChecklistAlbum.tsx, which needs the exact same grouping).
+type PersonalYardSlot = RowSlot<PersonalCatalogRow>;
+
+// A slot counts as owned if the user owns ANY of its constituent rows —
+// the physical card is the same regardless of which co-featured player's
+// name was picked when it was added.
+function ownedCardForRows(rows: PersonalCatalogRow[], ownedByKey: Map<string, Card>): Card | undefined {
+  for (const row of rows) {
+    const key = insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
+    const owned = ownedByKey.get(key);
+    if (owned) return owned;
+  }
+  return undefined;
 }
 
 // A catalog row's bucket within its Set, in priority order — see
@@ -131,7 +151,7 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
         let query = supabase
           .from("card_catalog")
           .select(
-            "id, set_name, team, player_name, card_number, insert_set, parallel, is_variation_of_base, is_autograph, is_relic, print_run, category"
+            "id, set_name, team, player_name, card_number, insert_set, card_title, parallel, is_variation_of_base, is_autograph, is_relic, print_run, category"
           )
           .eq(mode === "team" ? "team" : "player_name", value);
 
@@ -263,36 +283,53 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
     return map;
   }, [ownCards]);
 
-  const categoryCompletion = useMemo(() => {
-    const map = new Map<PersonalYardCategory, { owned: number; total: number }>();
+  // Every row in the current Set, grouped into slots per category (Base/
+  // Insert/Value/Parallel) — and, within each category, further grouped
+  // by groupIntoSlots so a multi-player card's co-featured-player rows
+  // become one slot instead of one tile each. Computed for every category
+  // up front (not just the currently selected one) so a chip can show
+  // "already 100%" without clicking into each one to check.
+  const slotsByCategory = useMemo(() => {
+    const rowsByCategory = new Map<PersonalYardCategory, PersonalCatalogRow[]>();
     for (const row of rowsInSet) {
       const cat = rowCategory(row);
-      const entry = map.get(cat) ?? { owned: 0, total: 0 };
-      entry.total += 1;
-      const key = insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
-      if (ownedByKey.has(key)) entry.owned += 1;
-      map.set(cat, entry);
+      const catRows = rowsByCategory.get(cat);
+      if (catRows) catRows.push(row);
+      else rowsByCategory.set(cat, [row]);
     }
+    const result = new Map<PersonalYardCategory, PersonalYardSlot[]>();
+    rowsByCategory.forEach((catRows, cat) => result.set(cat, groupIntoSlots(catRows, multiPlayerKeys)));
+    return result;
+  }, [rowsInSet, multiPlayerKeys]);
+
+  const categoryCompletion = useMemo(() => {
+    const map = new Map<PersonalYardCategory, { owned: number; total: number }>();
+    slotsByCategory.forEach((slots, cat) => {
+      let owned = 0;
+      for (const slot of slots) {
+        if (ownedCardForRows(slot.rows, ownedByKey)) owned += 1;
+      }
+      map.set(cat, { owned, total: slots.length });
+    });
     return map;
-  }, [rowsInSet, ownedByKey]);
+  }, [slotsByCategory, ownedByKey]);
 
   function isCategoryComplete(cat: PersonalYardCategory) {
     const entry = categoryCompletion.get(cat);
     return Boolean(entry && entry.total > 0 && entry.owned === entry.total);
   }
 
-  function findOwnedCard(row: PersonalCatalogRow) {
-    const key = insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number);
-    return ownedByKey.get(key);
+  function findOwnedCard(slot: PersonalYardSlot) {
+    return ownedCardForRows(slot.rows, ownedByKey);
   }
 
   const checklist = useMemo(() => {
     if (!category) return [];
-    return rowsInSet.filter((row) => rowCategory(row) === category);
-  }, [rowsInSet, category]);
+    return slotsByCategory.get(category) ?? [];
+  }, [slotsByCategory, category]);
 
   const ownedCount = useMemo(
-    () => checklist.filter((row) => findOwnedCard(row)).length,
+    () => checklist.filter((slot) => findOwnedCard(slot)).length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [checklist, ownedByKey]
   );
@@ -375,14 +412,15 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
           </div>
 
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-            {checklist.map((row) => {
-              const ownedCard = findOwnedCard(row);
+            {checklist.map((slot) => {
+              const row = slot.rows[0];
+              const ownedCard = findOwnedCard(slot);
 
               if (ownedCard) {
                 const ownedCardImageUrl = coverPhoto(ownedCard);
                 return (
                   <Link
-                    key={row.id}
+                    key={slot.key}
                     href={`/collection/${ownedCard.id}`}
                     className="flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40"
                   >
@@ -434,7 +472,7 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
               if (readOnly) {
                 return (
                   <div
-                    key={row.id}
+                    key={slot.key}
                     className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface"
                   >
                     {lockedTileContent}
@@ -447,7 +485,7 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
 
               return (
                 <Link
-                  key={row.id}
+                  key={slot.key}
                   href={addCardHref}
                   className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
                 >

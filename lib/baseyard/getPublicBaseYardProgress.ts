@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database";
 import { ownershipKey } from "@/lib/utils/checklist";
 import { isChromeBaseInsertSet } from "@/lib/utils/cardClassification";
+import { findMultiPlayerKeys, groupIntoSlots } from "@/lib/utils/multiPlayerCard";
 
 export interface BaseYardSetProgress {
   setName: string;
@@ -27,15 +28,21 @@ export async function getPublicBaseYardProgress(
   // silently drop every row with a NULL insert_set too (NULL ILIKE
   // anything is NULL, not true, in SQL's three-valued logic).
   const pageSize = 1000;
-  const catalogRows: { set_name: string; team: string | null; player_name: string; card_number: string | null }[] =
-    [];
+  const catalogRows: {
+    id: string;
+    set_name: string;
+    team: string | null;
+    player_name: string;
+    card_number: string | null;
+    insert_set: string | null;
+  }[] = [];
   let from = 0;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data } = await supabase
       .from("card_catalog")
-      .select("set_name, team, player_name, card_number, insert_set")
+      .select("id, set_name, team, player_name, card_number, insert_set")
       .eq("category", "Base")
       .eq("is_variation_of_base", false)
       .range(from, from + pageSize - 1);
@@ -47,6 +54,15 @@ export async function getPublicBaseYardProgress(
   }
 
   if (catalogRows.length === 0) return [];
+
+  // Unlike ChecklistAlbum/getTeamYardProgress, nothing here filters by
+  // team, so a cross-team multi-player card mistagged category='Base'
+  // (e.g. League Leaders — a known catalog data-quality issue, see the
+  // card_title/grouping fix's own notes) would otherwise count once per
+  // co-featured player instead of once per physical card. Grouped into
+  // slots for the same reason as everywhere else this pattern shows up.
+  const multiPlayerKeys = findMultiPlayerKeys(catalogRows);
+  const slots = groupIntoSlots(catalogRows, multiPlayerKeys);
 
   const { data: ownedCards } = await supabase
     .from("cards")
@@ -72,9 +88,11 @@ export async function getPublicBaseYardProgress(
   const totals = new Map<string, number>();
   const owned = new Map<string, number>();
 
-  for (const row of catalogRows) {
+  for (const slot of slots) {
+    const row = slot.rows[0];
     totals.set(row.set_name, (totals.get(row.set_name) ?? 0) + 1);
-    if (ownedKeys.has(ownershipKey(row.player_name, row.team, row.set_name, row.card_number))) {
+    const isOwned = slot.rows.some((r) => ownedKeys.has(ownershipKey(r.player_name, r.team, r.set_name, r.card_number)));
+    if (isOwned) {
       owned.set(row.set_name, (owned.get(row.set_name) ?? 0) + 1);
     }
   }

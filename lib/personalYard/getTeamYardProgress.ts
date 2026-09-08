@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database";
 import { insertOwnershipKey } from "@/lib/utils/checklist";
+import { findMultiPlayerKeys, groupIntoSlots } from "@/lib/utils/multiPlayerCard";
 
 export interface PersonalYardProgress {
   owned: number;
@@ -18,6 +19,7 @@ export async function getTeamYardProgress(
 ): Promise<PersonalYardProgress> {
   const pageSize = 1000;
   const catalogRows: {
+    id: string;
     set_name: string;
     insert_set: string | null;
     team: string | null;
@@ -30,7 +32,7 @@ export async function getTeamYardProgress(
   while (true) {
     const { data } = await supabase
       .from("card_catalog")
-      .select("set_name, insert_set, team, player_name, card_number")
+      .select("id, set_name, insert_set, team, player_name, card_number")
       .eq("team", team)
       .or("is_variation_of_base.eq.true,category.is.null,category.neq.Base")
       .range(from, from + pageSize - 1);
@@ -57,9 +59,20 @@ export async function getTeamYardProgress(
     )
   );
 
-  const owned = catalogRows.filter((row) =>
-    ownedKeys.has(insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number))
+  // A multi-player card featuring co-featured players from the same team
+  // (e.g. "Dual Autographs", "Triple Signatures") stores one catalog row
+  // per player, all sharing (set_name, insert_set, card_number) — grouped
+  // into one slot here too, same as PersonalYardAlbum's interactive
+  // album, so this summary's total/owned counts don't 2-3x a card that's
+  // really one physical slot.
+  const multiPlayerKeys = findMultiPlayerKeys(catalogRows);
+  const slots = groupIntoSlots(catalogRows, multiPlayerKeys);
+
+  const owned = slots.filter((slot) =>
+    slot.rows.some((row) =>
+      ownedKeys.has(insertOwnershipKey(row.player_name, row.team, row.set_name, row.insert_set ?? "", row.card_number))
+    )
   ).length;
 
-  return { owned, total: catalogRows.length };
+  return { owned, total: slots.length };
 }

@@ -45,6 +45,7 @@ type CatalogMatch = Pick<
   | "card_number"
   | "category"
   | "insert_set"
+  | "card_title"
   | "is_variation_of_base"
   | "is_rookie"
   | "is_autograph"
@@ -137,6 +138,13 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   const [cardNumber, setCardNumber] = useState(card?.card_number ?? "");
   const [setName, setSetName] = useState(card?.set_name ?? "");
   const [insertSet, setInsertSet] = useState(card?.insert_set ?? "");
+  // The specific name printed on a multi-player card (e.g. "AFC Rec
+  // Leaders"), copied from an exact catalog match — see
+  // lib/utils/multiPlayerCard.ts. Null for single-player cards and for a
+  // manual Insert Set pick (handleInsertSetChange), since the aggregate
+  // insertSetOptions view has no single card_title to offer once several
+  // card numbers share one insert_set bracket.
+  const [cardTitle, setCardTitle] = useState<string | null>(card?.card_title ?? null);
   const [isVariationOfBase, setIsVariationOfBase] = useState(card?.is_variation_of_base ?? false);
   const [parallel, setParallel] = useState(card?.parallel ?? "");
   const [tier, setTier] = useState("");
@@ -203,7 +211,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       const { data } = await supabase
         .from("card_catalog")
         .select(
-          "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_rookie, is_autograph, is_relic"
+          "id, player_name, team, set_name, card_number, category, insert_set, card_title, is_variation_of_base, is_rookie, is_autograph, is_relic"
         )
         .eq("id", initialCatalogId)
         .maybeSingle();
@@ -245,7 +253,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       let query = supabase
         .from("card_catalog")
         .select(
-          "id, player_name, team, set_name, card_number, category, insert_set, is_variation_of_base, is_rookie, is_autograph, is_relic"
+          "id, player_name, team, set_name, card_number, category, insert_set, card_title, is_variation_of_base, is_rookie, is_autograph, is_relic"
         );
 
       for (const filter of buildTokenOrFilters(tokens, CATALOG_SEARCH_COLUMNS)) {
@@ -336,6 +344,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       return;
     }
     setInsertSet("");
+    setCardTitle(null);
     setIsRookie(false);
     setIsAutograph(false);
     setIsRelic(false);
@@ -399,6 +408,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     setCardNumber(match.card_number ?? "");
     setSetName(match.set_name);
     setInsertSet(match.insert_set ?? "");
+    setCardTitle(match.card_title ?? null);
     setIsRookie(match.is_rookie);
     setIsAutograph(match.is_autograph);
     setIsRelic(match.is_relic);
@@ -418,8 +428,11 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     setCategory(option?.category ?? null);
     // card_catalog_insert_sets is a set-level aggregate view, not one
     // specific card_catalog row, so a manual Insert Set pick can no longer
-    // claim to be backed by an exact catalog_id.
+    // claim to be backed by an exact catalog_id or a specific card_title
+    // (several different card numbers can share one insert_set bracket,
+    // e.g. "LEAGUE LEADERS", each with its own card_title).
     setCatalogId(null);
+    setCardTitle(null);
   }
 
   function handleAddPhotos(e: React.ChangeEvent<HTMLInputElement>) {
@@ -546,6 +559,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       card_number: cardNumber || null,
       set_name: setName || null,
       insert_set: insertSet || null,
+      card_title: cardTitle,
       is_variation_of_base: isVariationOfBase,
       is_rookie: isRookie,
       parallel: parallel || null,
