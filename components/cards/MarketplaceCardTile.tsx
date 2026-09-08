@@ -36,7 +36,7 @@ export function MarketplaceCardTile({
   isNew = false,
 }: MarketplaceCardTileProps) {
   return (
-    <div className="flex w-32 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
+    <div className="flex h-[205px] w-32 shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card transition-colors hover:border-primary/40">
       <Link href={href} className="block">
         <div className="relative h-20 w-full bg-surface">
           {imageUrl ? (

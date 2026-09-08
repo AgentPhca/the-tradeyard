@@ -215,11 +215,20 @@ export default async function DashboardPage() {
     </>
   );
 
+  // Desktop grid: 2 columns, 3 explicitly row-paired rows (Hero/Pulse,
+  // Feed/Yards, Matches/QuickActions), each item pinned via row-start +
+  // col-start instead of relying on `order` + implicit auto-placement to
+  // land in the right cell. `items-stretch` (grid's own default, spelled
+  // out here since it's the whole point of the fix) makes the shorter
+  // item in each row match the taller one's height automatically — no
+  // per-row height math needed. When there's no Matches activity, row 3
+  // has no left-hand pairing, so Quick Actions spans both columns instead
+  // of leaving row 3's left half empty.
   return (
     <div
-      className={`flex min-w-0 flex-col ${SECTION_GAP} min-[900px]:grid min-[900px]:grid-cols-[2.1fr_1fr] min-[900px]:items-start min-[900px]:gap-x-6`}
+      className={`flex min-w-0 flex-col ${SECTION_GAP} min-[900px]:grid min-[900px]:grid-cols-[2.1fr_1fr] min-[900px]:grid-rows-[auto_auto_auto] min-[900px]:items-stretch min-[900px]:gap-x-6`}
     >
-      <div className="order-1 min-w-0 min-[900px]:col-start-1">
+      <div className="order-1 min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-1 min-[900px]:h-full">
         <HeroSlider
           slides={[
             { key: "welcome", className: "bg-gradient-to-br from-primary/10 to-transparent", content: welcomeSlide },
@@ -237,21 +246,21 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="order-2 min-w-0 min-[900px]:order-1 min-[900px]:col-start-2">
+      <div className="order-2 min-w-0 min-[900px]:col-start-2 min-[900px]:row-start-1">
         <PlatformPulseTiles pulse={pulse} />
       </div>
 
-      <div className="order-3 min-w-0 min-[900px]:col-start-1">
+      <div className="order-3 min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-2">
         <MarketplaceFeedSection feed={marketplaceFeed} />
       </div>
 
       {matches.hasOwnActivity && (
-        <div className="order-4 min-w-0 min-[900px]:order-5 min-[900px]:col-start-1">
+        <div className="order-4 min-w-0 min-[900px]:col-start-1 min-[900px]:row-start-3">
           <MatchesCarousel matches={matches} />
         </div>
       )}
 
-      <div className="order-5 min-w-0 min-[900px]:order-4 min-[900px]:col-start-2">
+      <div className="order-5 min-w-0 min-[900px]:col-start-2 min-[900px]:row-start-2">
         <div>
           <div className="mb-3 flex items-baseline justify-between gap-2">
             <span className="text-base font-bold text-text">Deine Yards</span>
@@ -263,7 +272,11 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="order-6 min-w-0 min-[900px]:col-start-2">
+      <div
+        className={`order-6 min-w-0 min-[900px]:row-start-3 ${
+          matches.hasOwnActivity ? "min-[900px]:col-start-2" : "min-[900px]:col-span-2"
+        }`}
+      >
         <div className="flex gap-2.5">
           <Link href="/collection" className="btn-primary flex-1">
             Collection

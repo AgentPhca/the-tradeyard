@@ -49,7 +49,23 @@ export function MarketplaceFeedSection({ feed }: MarketplaceFeedSectionProps) {
       {feed.mode === "team" && (
         <p className="mb-3 text-xs text-muted">Neu im Marktplatz · noch nicht in deiner Sammlung</p>
       )}
-      <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar">
+      {/*
+        Mobile stays a touch-swipeable horizontal scroller. Desktop has no
+        drag-to-scroll affordance, so a partially-cut-off tile at the right
+        edge reads as a layout bug rather than "more to scroll to" — capped
+        to at most 5 tiles' width (5 * 128px tiles + 4 * 10px gaps = 680px,
+        see MarketplaceCardTile's w-32) AND wrapped + height-clipped to
+        exactly one row (MarketplaceCardTile's fixed h-[205px]) instead of
+        left scrollable. The two together guarantee only whole tiles are
+        ever visible: max-width caps how many COULD fit (never more than
+        5), and the wrap+clip means whatever fewer number actually fits at
+        a given column width (e.g. the ~900-1075px band, where the 2.1fr
+        column is narrower than 680px) wraps its remainder to a hidden
+        second row instead of slicing the last tile in half. Sets with 5 or
+        fewer items are unaffected either way; the "Alle ansehen" link
+        above still reaches every other item.
+      */}
+      <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar min-[900px]:max-w-[680px] min-[900px]:flex-wrap min-[900px]:content-start min-[900px]:overflow-hidden min-[900px]:pb-0 min-[900px]:max-h-[205px]">
         {feed.items.map((item) => {
           const tier = cardValueTier(item.card);
           return (

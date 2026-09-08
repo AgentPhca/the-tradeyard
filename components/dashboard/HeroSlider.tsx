@@ -30,11 +30,11 @@ export function HeroSlider({ slides }: HeroSliderProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border">
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border">
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        className="flex snap-x snap-mandatory overflow-x-auto no-scrollbar"
+        className="flex flex-1 snap-x snap-mandatory overflow-x-auto no-scrollbar"
       >
         {slides.map((slide) => (
           <div
