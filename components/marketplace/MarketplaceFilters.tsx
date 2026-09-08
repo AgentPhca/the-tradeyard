@@ -86,11 +86,12 @@ export function MarketplaceFilters() {
   }, [playerName]);
 
   // Insert Set options are scoped to the chosen Set, same as the Add Card form.
+  // Options are cleared immediately (not just on setName becoming falsy)
+  // so a Set switch never briefly shows the previous Set's insert sets
+  // while the new fetch is in flight — see the same fix in CardForm.tsx.
   useEffect(() => {
-    if (!setName) {
-      setInsertSetOptions([]);
-      return;
-    }
+    setInsertSetOptions([]);
+    if (!setName) return;
 
     let cancelled = false;
 

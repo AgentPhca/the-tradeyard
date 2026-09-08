@@ -45,9 +45,12 @@ export function WishlistForm() {
         ? "Select a base type first"
         : "Any parallel";
 
+  // Options are cleared immediately (not just on setName becoming falsy)
+  // so a Set switch never briefly shows the previous Set's insert sets
+  // while the new fetch is in flight — see the same fix in CardForm.tsx.
   useEffect(() => {
+    setInsertSetOptions([]);
     if (!setName) {
-      setInsertSetOptions([]);
       setInsertSet("");
       return;
     }

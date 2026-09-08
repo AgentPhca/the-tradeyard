@@ -19,12 +19,25 @@ alter table public.cards
 
 -- ----------------------------------------------------------------------------
 -- card_catalog_insert_sets
--- Small distinct-combinations view so the Add Card form can populate an
--- "Insert Set" dropdown (scoped to the chosen Set) without pulling
--- thousands of individual card_catalog rows to dedupe client-side.
--- ----------------------------------------------------------------------------
+-- One dropdown-worthy row per (set_name, insert_set) so the Add Card /
+-- Wishlist / Marketplace forms can populate an "Insert Set" dropdown
+-- (scoped to the chosen Set) without pulling thousands of individual
+-- card_catalog rows to dedupe client-side.
+--
+-- `distinct on (set_name, insert_set)` rather than a plain `distinct`
+-- across every selected column: the same insert_set text can carry more
+-- than one attribute combination (e.g. a plain Insert row and its
+-- is_variation_of_base=true photo-variation sibling share the exact same
+-- insert_set name — see fix_league_leaders_naming.sql), which a plain
+-- `distinct` turned into two separate dropdown rows with identical
+-- visible text. `order by ... is_variation_of_base, is_autograph,
+-- is_relic` makes the plain, non-variation/non-autograph/non-relic row
+-- the representative kept for each (set_name, insert_set) pair, since
+-- picking an Insert Set from this dropdown (as opposed to matching an
+-- exact catalog row via player search) should default to tagging the
+-- card as that plain insert, not as a Parallel/Autograph/Relic.
 create or replace view public.card_catalog_insert_sets as
-select distinct
+select distinct on (set_name, insert_set)
   set_name,
   insert_set,
   category,
@@ -32,6 +45,7 @@ select distinct
   is_autograph,
   is_relic
 from public.card_catalog
-where insert_set is not null;
+where insert_set is not null
+order by set_name, insert_set, is_variation_of_base, is_autograph, is_relic;
 
 grant select on public.card_catalog_insert_sets to authenticated;

@@ -300,12 +300,15 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   }, [playerName]);
 
   // Populate the Insert Set dropdown from the real checklist data, scoped
-  // to whichever Set is currently chosen.
+  // to whichever Set is currently chosen. Options are cleared immediately
+  // (not just on setName becoming falsy) so a Set switch never briefly
+  // shows the previous Set's insert sets while the new fetch is in
+  // flight — without this, picking a catalog match from player search
+  // (which sets setName + insertSet together) could leave the dropdown
+  // listing the old Set's options until the new fetch resolves.
   useEffect(() => {
-    if (!setName) {
-      setInsertSetOptions([]);
-      return;
-    }
+    setInsertSetOptions([]);
+    if (!setName) return;
 
     let cancelled = false;
 
