@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { insertOwnershipKey } from "@/lib/utils/checklist";
 import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
+import { isInsert, isParallel } from "@/lib/utils/cardClassification";
 import type { Card } from "@/lib/types/database";
 
 type PersonalYardMode = "team" | "player";
@@ -24,23 +25,28 @@ interface PersonalCatalogRow {
   card_number: string | null;
   insert_set: string | null;
   parallel: string | null;
+  is_variation_of_base: boolean;
   is_autograph: boolean;
   is_relic: boolean;
+  print_run: number | null;
   category: string | null;
 }
 
-// A catalog row's bucket within its Set, in priority order: a named
-// parallel wins over everything else (rare in practice today — real
-// catalog data almost never carries `parallel`, see parallelFrameColor.ts's
-// own note on this — but still the correct rule if it ever does); an
-// autograph/relic row is "Value" regardless of category (mirrors
-// ValueYard's own definition); a real insert set (category<>'Base', same
-// null-safe check InsertYard's own catalog query uses) is "Insert";
-// everything else is "Base".
+// A catalog row's bucket within its Set, in priority order — see
+// lib/utils/cardClassification.ts for the underlying rules. A Parallel
+// (photo/design variation, a manually-tagged numbered chase parallel, or a
+// CHROME-as-second-Base-tier row) wins over everything else; a numbered/
+// autograph/relic row is "Value" (same definition ValueYard uses,
+// including print_run — an autograph-variation row that isParallel already
+// excluded via its category='Autograph' check lands here instead); a real
+// insert set (including Autograph/Relic-category ones, same broadened rule
+// InsertYard uses) is "Insert"; everything else is "Base" — only reachable
+// in PlayerYard mode ("alles" by design), never TeamYard (whose own
+// catalog query already excludes plain Base rows entirely).
 function rowCategory(row: PersonalCatalogRow): PersonalYardCategory {
-  if (row.parallel) return "Parallel";
-  if (row.is_autograph || row.is_relic) return "Value";
-  if (row.insert_set && row.category !== "Base") return "Insert";
+  if (isParallel(row)) return "Parallel";
+  if (row.print_run != null || row.is_autograph || row.is_relic) return "Value";
+  if (isInsert(row)) return "Insert";
   return "Base";
 }
 
@@ -125,19 +131,17 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
         let query = supabase
           .from("card_catalog")
           .select(
-            "id, set_name, team, player_name, card_number, insert_set, parallel, is_autograph, is_relic, category"
+            "id, set_name, team, player_name, card_number, insert_set, parallel, is_variation_of_base, is_autograph, is_relic, print_run, category"
           )
           .eq(mode === "team" ? "team" : "player_name", value);
 
         if (mode === "team") {
-          // Non-base only. is_variation_of_base=false excludes photo
-          // variation rows (e.g. "TEAM CAMO VARIATION") that still carry
-          // category='Base' but a non-null insert_set — without it they'd
-          // wrongly count as "non-base" here, the same trap InsertYard's
-          // own catalog query guards against.
-          query = query
-            .eq("is_variation_of_base", false)
-            .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true");
+          // Non-base only — "NOT pure Base" (see lib/utils/
+          // cardClassification.ts's isPureBase), matching getTeamYardProgress
+          // .ts's own catalog filter. Written out as the OR form directly
+          // (De Morgan's) rather than a single .not() call, since PostgREST
+          // has no clean way to negate an AND-of-two-columns filter.
+          query = query.or("is_variation_of_base.eq.true,category.is.null,category.neq.Base");
         }
         // player mode: no further restriction — "alles" by design.
 

@@ -7,11 +7,10 @@ export interface PersonalYardProgress {
   total: number;
 }
 
-// TeamYard: every card_catalog slot for this team that ISN'T a plain base
-// card — numbered/parallel, a real insert set, or autograph/relic. Same
-// is_variation_of_base=false exclusion BaseYard/InsertYard use (a
-// "TEAM CAMO VARIATION" row still carries category='Base' but a non-null
-// insert_set, so without this guard it would wrongly count as "non-base").
+// TeamYard: every card_catalog slot for this team that ISN'T a plain Base
+// card — see lib/utils/cardClassification.ts's isPureBase. Written out as
+// the OR form directly (De Morgan's) rather than a single .not() call,
+// since PostgREST has no clean way to negate an AND-of-two-columns filter.
 export async function getTeamYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string,
@@ -33,8 +32,7 @@ export async function getTeamYardProgress(
       .from("card_catalog")
       .select("set_name, insert_set, team, player_name, card_number")
       .eq("team", team)
-      .eq("is_variation_of_base", false)
-      .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true")
+      .or("is_variation_of_base.eq.true,category.is.null,category.neq.Base")
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];

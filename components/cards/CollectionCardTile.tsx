@@ -10,6 +10,8 @@ interface CollectionCardTileProps {
   team: string | null;
   setName: string | null;
   category: string | null;
+  is_variation_of_base: boolean;
+  insert_set: string | null;
   parallel: string | null;
 }
 
@@ -24,9 +26,11 @@ export function CollectionCardTile({
   team,
   setName,
   category,
+  is_variation_of_base,
+  insert_set,
   parallel,
 }: CollectionCardTileProps) {
-  const type = deriveCardType({ category, parallel });
+  const type = deriveCardType({ category, is_variation_of_base, insert_set, parallel });
   const subtitle = [team, setName].filter(Boolean).join(" · ");
 
   return (

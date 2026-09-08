@@ -11,6 +11,7 @@ import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
 import { coverPhoto } from "@/lib/utils/cardPhotos";
 import { insertOwnershipKey, ownershipKey } from "@/lib/utils/checklist";
 import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
+import { isChromeBaseInsertSet, isInsert, isPureBase } from "@/lib/utils/cardClassification";
 import type { Card, CardCatalogEntry } from "@/lib/types/database";
 
 type ChecklistCatalogRow = Pick<
@@ -132,21 +133,26 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
   // Fetched once — every catalog row this yard's checklist can ever need,
   // across all sets. A few thousand rows at most, and it's a one-time load
   // rather than a query per Set/grouping click, which keeps switching
-  // instant.
+  // instant. See lib/utils/cardClassification.ts for the corrected
+  // Base/Insert/Parallel rules this mirrors.
   //
   // BaseYard: category='Base', is_variation_of_base=false excludes
   // photo-variation rows (e.g. "TEAM CAMO VARIATION") that the checklist
   // import also tagged category='Base' — without this, the same
   // player/card_number shows up 2-3x instead of once per real checklist
-  // slot.
-  // InsertYard: insert_set is not null and category<>'Base' — the plain
-  // base checklist rows are tagged insert_set='BASE CARDS' in the source
-  // data, so category is what actually distinguishes "a real insert set"
-  // from "the base checklist", not insert_set alone. Guards the category
+  // slot. A "CHROME BASE" second tier (some sets carry both a normal and a
+  // Chrome Base tier with identical numbering, tagged identically to a
+  // real Base row otherwise) is filtered out client-side afterward — it's
+  // a Parallel, not a second BaseYard slot.
+  // InsertYard: category<>'Base' (broadened beyond a literal
+  // category='Insert' check — an Autograph/Relic-category insert set like
+  // "REAL ONE AUTOGRAPHS" is just as much a trackable checklist as a plain
+  // Insert one), is_variation_of_base=false. Guards the category
   // comparison against null the same null-safe way as everywhere else in
   // this app (NULL <> 'Base' is NULL, not true, in SQL's three-valued
   // logic — a plain .neq() would silently drop any row with no category at
-  // all).
+  // all) — moot in the real catalog data (category is never null there),
+  // kept for defensiveness anyway.
   //
   // Explicitly paginated with .range() rather than one .limit(10000) call —
   // a single request was still silently getting cut off well under 10000
@@ -171,7 +177,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
         query =
           mode === "base"
             ? query.eq("category", "Base")
-            : query.not("insert_set", "is", null).or("category.is.null,category.neq.Base");
+            : query.or("category.is.null,category.neq.Base");
 
         const { data } = await query
           .order("set_name")
@@ -181,7 +187,9 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
           .range(from, from + pageSize - 1);
 
         const page = data ?? [];
-        allRows.push(...page);
+        const filteredPage =
+          mode === "base" ? page.filter((row) => !isChromeBaseInsertSet(row.insert_set)) : page;
+        allRows.push(...filteredPage);
         if (cancelled || page.length < pageSize) break;
         from += pageSize;
       }
@@ -288,12 +296,18 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     for (const c of ownCards) {
       if (!c.set_name) continue;
       if (mode === "base") {
-        if (c.category !== "Base") continue;
+        // A "CHROME BASE" owned card must NOT satisfy a plain Base slot's
+        // ownership key — both share category='Base'/is_variation_of_base
+        // =false and (critically) the SAME player+team+set+card_number,
+        // since ownershipKey doesn't carry insert_set. Without this check,
+        // owning only the Chrome parallel of a card would incorrectly mark
+        // the plain Base slot as owned too.
+        if (!isPureBase(c)) continue;
         const key = ownershipKey(c.player_name, c.team, c.set_name, c.card_number);
         if (!map.has(key)) map.set(key, c);
       } else {
-        if (c.category === "Base" || !c.insert_set) continue;
-        const key = insertOwnershipKey(c.player_name, c.team, c.set_name, c.insert_set, c.card_number);
+        if (!isInsert(c)) continue;
+        const key = insertOwnershipKey(c.player_name, c.team, c.set_name, c.insert_set ?? "", c.card_number);
         if (!map.has(key)) map.set(key, c);
       }
     }

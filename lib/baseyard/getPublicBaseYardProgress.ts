@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database";
 import { ownershipKey } from "@/lib/utils/checklist";
+import { isChromeBaseInsertSet } from "@/lib/utils/cardClassification";
 
 export interface BaseYardSetProgress {
   setName: string;
@@ -17,9 +18,14 @@ export async function getPublicBaseYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string
 ): Promise<BaseYardSetProgress[]> {
-  // Every Base-category catalog slot, across all sets — paginated the same
-  // way ChecklistAlbum fetches it (see that file for why .range() chunking
-  // is required instead of a single large .limit()).
+  // Every plain-Base-category catalog slot, across all sets — paginated
+  // the same way ChecklistAlbum fetches it (see that file for why .range()
+  // chunking is required instead of a single large .limit()). The
+  // CHROME-as-second-Base-tier exclusion is applied client-side after
+  // fetching (see lib/utils/cardClassification.ts) rather than as a raw
+  // ILIKE filter here — a plain `insert_set NOT ILIKE '%CHROME%'` would
+  // silently drop every row with a NULL insert_set too (NULL ILIKE
+  // anything is NULL, not true, in SQL's three-valued logic).
   const pageSize = 1000;
   const catalogRows: { set_name: string; team: string | null; player_name: string; card_number: string | null }[] =
     [];
@@ -29,14 +35,14 @@ export async function getPublicBaseYardProgress(
   while (true) {
     const { data } = await supabase
       .from("card_catalog")
-      .select("set_name, team, player_name, card_number")
+      .select("set_name, team, player_name, card_number, insert_set")
       .eq("category", "Base")
       .eq("is_variation_of_base", false)
       .range(from, from + pageSize - 1);
 
-    const page = data ?? [];
+    const page = (data ?? []).filter((row) => !isChromeBaseInsertSet(row.insert_set));
     catalogRows.push(...page);
-    if (page.length < pageSize) break;
+    if ((data ?? []).length < pageSize) break;
     from += pageSize;
   }
 
@@ -44,14 +50,23 @@ export async function getPublicBaseYardProgress(
 
   const { data: ownedCards } = await supabase
     .from("cards")
-    .select("player_name, team, set_name, card_number")
+    .select("player_name, team, set_name, card_number, is_variation_of_base, insert_set")
     .eq("owner_id", ownerId)
     .eq("category", "Base")
     .neq("status", "traded")
     .not("set_name", "is", null);
 
+  // A "CHROME BASE" owned card must NOT satisfy a plain Base slot's
+  // ownership key — both share category='Base'/is_variation_of_base=false
+  // and (critically) the SAME player+team+set+card_number, since
+  // ownershipKey doesn't carry insert_set. Without this, owning only the
+  // Chrome parallel of a card would incorrectly mark the plain Base slot
+  // as owned too — see ChecklistAlbum.tsx's own ownedByKey for the same
+  // guard.
   const ownedKeys = new Set(
-    (ownedCards ?? []).map((c) => ownershipKey(c.player_name, c.team, c.set_name!, c.card_number))
+    (ownedCards ?? [])
+      .filter((c) => !c.is_variation_of_base && !isChromeBaseInsertSet(c.insert_set))
+      .map((c) => ownershipKey(c.player_name, c.team, c.set_name!, c.card_number))
   );
 
   const totals = new Map<string, number>();

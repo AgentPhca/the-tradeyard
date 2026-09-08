@@ -28,9 +28,13 @@ export async function getPublicInsertYardProgress(
   ownerId: string
 ): Promise<{ bySet: InsertYardSetProgress[]; byInsertSet: InsertYardInsertSetProgress[] }> {
   // Every catalog slot this yard's checklist covers, across all sets — see
-  // ChecklistAlbum for why .range() chunking is required, and why category
-  // (not insert_set alone) is what distinguishes "a real insert set" from
-  // "the base checklist" (whose rows are tagged insert_set='BASE CARDS').
+  // ChecklistAlbum for why .range() chunking is required, and see
+  // lib/utils/cardClassification.ts for why category (not insert_set
+  // alone) is what distinguishes "a real insert set" from "the base
+  // checklist" (whose rows are tagged insert_set='BASE CARDS'). Broadened
+  // beyond a literal category='Insert' check: an Autograph/Relic-category
+  // insert set (e.g. "REAL ONE AUTOGRAPHS", "NFL MATERIAL CARDS") is just
+  // as much a trackable checklist as a plain Insert one.
   const pageSize = 1000;
   const catalogRows: {
     set_name: string;
@@ -46,7 +50,6 @@ export async function getPublicInsertYardProgress(
     const { data } = await supabase
       .from("card_catalog")
       .select("set_name, team, player_name, insert_set, card_number")
-      .not("insert_set", "is", null)
       .or("category.is.null,category.neq.Base")
       .eq("is_variation_of_base", false)
       .range(from, from + pageSize - 1);
@@ -66,7 +69,8 @@ export async function getPublicInsertYardProgress(
     .neq("status", "traded")
     .not("set_name", "is", null)
     .not("insert_set", "is", null)
-    .or("category.is.null,category.neq.Base");
+    .or("category.is.null,category.neq.Base")
+    .eq("is_variation_of_base", false);
 
   const ownedKeys = new Set(
     (ownedCards ?? []).map((c) =>

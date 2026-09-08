@@ -16,6 +16,7 @@ import { allPhotos, coverPhoto } from "@/lib/utils/cardPhotos";
 import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
 import { getParallelFrameColor, parallelFrameBackground } from "@/lib/utils/parallelFrameColor";
 import { findMultiPlayerKeys, multiPlayerKey } from "@/lib/utils/multiPlayerCard";
+import { isInsert, isPureBase } from "@/lib/utils/cardClassification";
 import type { Card } from "@/lib/types/database";
 
 // How many marketplace recommendations to aim for before falling back to
@@ -43,15 +44,22 @@ function AttrIcon({ active, icon: Icon, title }: { active: boolean; icon: Lucide
   );
 }
 
-// "Refractor", "Cosmic /50", "Base" — the parallel name if set, else the
-// insert set name, else plain "Base", with the print run appended when
+// "Refractor", "Cosmic /50", "Golden Mirror Image Variations", "Base" —
+// the manually-tagged parallel name if set, else "Base" for a genuine
+// plain Base slot (ignoring a non-null insert_set that's just a PDF-
+// section heading like "BASE CARDS I" — see isPureBase), else the insert
+// set name (a real insert set, or a photo/design variation name like
+// "Golden Mirror Image Variations"), with the print run appended when
 // there is one. Shared between the meta-strip's "Typ" value and the
 // accordion's "Insert / Parallel" field so the two never disagree.
-function typeLabel(card: Pick<Card, "parallel" | "insert_set" | "print_run">): string {
+function typeLabel(
+  card: Pick<Card, "parallel" | "insert_set" | "print_run" | "category" | "is_variation_of_base">
+): string {
   const withPrintRun = (name: string) => (card.print_run != null ? `${name} /${card.print_run}` : name);
   if (card.parallel) return withPrintRun(card.parallel);
+  if (isPureBase(card)) return withPrintRun("Base");
   if (card.insert_set) return withPrintRun(titleCase(card.insert_set));
-  return "Base";
+  return withPrintRun("Base");
 }
 
 export default async function CardDetailPage({
@@ -193,7 +201,7 @@ export default async function CardDetailPage({
     for (const row of sameTeamRows ?? []) recommendedById.set(row.id, row as Card);
   }
 
-  if (card.category === "Insert" && card.insert_set) {
+  if (isInsert(card) && card.insert_set) {
     const { data: sameInsertSetRows } = await supabase
       .from("cards")
       .select("*")
@@ -352,6 +360,8 @@ export default async function CardDetailPage({
                     team={c.team}
                     setName={c.set_name}
                     category={c.category}
+                    is_variation_of_base={c.is_variation_of_base}
+                    insert_set={c.insert_set}
                     parallel={c.parallel}
                   />
                 ))}

@@ -4,6 +4,7 @@ import { getPublicBaseYardProgress } from "@/lib/baseyard/getPublicBaseYardProgr
 import { getPublicInsertYardProgress } from "@/lib/insertyard/getPublicInsertYardProgress";
 import { getTeamYardProgress } from "@/lib/personalYard/getTeamYardProgress";
 import { getPlayerYardProgress } from "@/lib/personalYard/getPlayerYardProgress";
+import { isParallel } from "@/lib/utils/cardClassification";
 
 export interface PercentYard {
   owned: number;
@@ -58,7 +59,7 @@ export async function getYardsSummary(
     getPublicInsertYardProgress(supabase, ownerId),
     supabase
       .from("cards")
-      .select("is_rookie, parallel, is_relic, is_autograph, print_run")
+      .select("is_rookie, parallel, is_relic, is_autograph, print_run, is_variation_of_base, insert_set, category")
       .eq("owner_id", ownerId)
       .neq("status", "traded"),
   ]);
@@ -80,7 +81,7 @@ export async function getYardsSummary(
     (c) => c.print_run != null || c.is_autograph || c.is_relic
   ).length;
   const rookieYardCount = cards.filter((c) => c.is_rookie).length;
-  const parallelYardCount = cards.filter((c) => c.parallel != null).length;
+  const parallelYardCount = cards.filter((c) => isParallel(c)).length;
 
   let teamYard: YardsSummary["teamYard"] = null;
   if (profile.personal_team_yard) {

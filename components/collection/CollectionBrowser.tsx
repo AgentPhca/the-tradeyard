@@ -18,6 +18,7 @@ import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
 import { PersonalYardAlbum } from "@/components/collection/PersonalYardAlbum";
 import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
+import { isInsert, isParallel, isPureBase } from "@/lib/utils/cardClassification";
 import type { Card } from "@/lib/types/database";
 
 type YardKey = "rookie" | "base" | "insert" | "value" | "parallel" | "teamyard" | "playeryard";
@@ -61,11 +62,12 @@ const YARDS: Yard[] = [
     label: "BaseYard",
     description: "Base cards from the checklist",
     icon: Layers,
-    // Driven by card_catalog.category (mirrored onto cards.category on
-    // catalog-match autofill) rather than deriving "base-ness" from other
-    // fields — a card with no catalog match has category = null and won't
-    // show up here.
-    test: (c) => c.category === "Base",
+    // See lib/utils/cardClassification.ts — category alone isn't enough:
+    // a photo/design variation (is_variation_of_base) or a "CHROME BASE"
+    // second tier (some sets carry both a normal and a Chrome Base tier
+    // with identical numbering) also carries category='Base', but neither
+    // is a real BaseYard checklist slot.
+    test: (c) => isPureBase(c),
     badgeClass: "bg-sky-500/10 text-sky-400",
     tileBorderClass: "border-border",
     isAlbum: true,
@@ -75,10 +77,13 @@ const YARDS: Yard[] = [
     label: "InsertYard",
     description: "Insert sets from the checklist",
     icon: LayoutGrid,
-    // The plain base checklist rows are tagged insert_set='BASE CARDS' in
-    // the source data, so category (not insert_set alone) is what actually
-    // distinguishes "a real insert set" from "the base checklist".
-    test: (c) => c.insert_set != null && c.category !== "Base",
+    // See lib/utils/cardClassification.ts — insert_set alone isn't a
+    // reliable signal (the plain base checklist rows are tagged with a
+    // PDF-section-heading insert_set like "BASE CARDS I" too). Includes
+    // Autograph/Relic-category insert sets (e.g. "REAL ONE AUTOGRAPHS",
+    // "NFL MATERIAL CARDS") alongside plain category='Insert' ones — all
+    // three are trackable insert-set checklists, just tagged differently.
+    test: (c) => isInsert(c),
     badgeClass: "bg-teal-500/10 text-teal-400",
     tileBorderClass: "border-border",
     isAlbum: true,
@@ -101,7 +106,12 @@ const YARDS: Yard[] = [
     label: "ParallelYard",
     description: "Cards with a named parallel",
     icon: Shapes,
-    test: (c) => c.parallel != null,
+    // See lib/utils/cardClassification.ts — a manually-tagged numbered
+    // parallel (via the Parallels reference table) always counts; so does
+    // any photo/design variation-of-base row (Team Camo, Golden Mirror
+    // Image, Clear, Etch, etc. — excluding autograph variations, which
+    // are ValueYard's territory) and the CHROME-as-second-Base-tier rows.
+    test: (c) => isParallel(c),
     badgeClass: "bg-fuchsia-500/10 text-fuchsia-400",
     tileBorderClass: "border-border",
   },
@@ -152,9 +162,9 @@ export function CollectionBrowser({
         label: `TeamYard: ${personalTeamYard}`,
         description: `${personalTeamYard} cards that aren't plain Base`,
         icon: Users,
-        test: (c) =>
-          c.team === personalTeamYard &&
-          (c.parallel != null || (c.insert_set != null && c.category !== "Base") || c.is_autograph || c.is_relic),
+        // "Not a plain Base card" — see lib/utils/cardClassification.ts's
+        // isPureBase. Matches getTeamYardProgress.ts's own catalog filter.
+        test: (c) => c.team === personalTeamYard && !isPureBase(c),
         badgeClass: "bg-orange-500/10 text-orange-400",
         tileBorderClass: "border-border",
         isAlbum: true,
@@ -252,17 +262,19 @@ export function CollectionBrowser({
     return counts;
   }, [filterBarCards, allYards]);
 
-  // Base cards are BaseYard's own thing now (a checklist-completion game,
-  // not a "card in my collection" in the usual sense) — they only show up
-  // in the default grid's own dedicated yard, not mixed into the general
-  // list. Insert cards stay in the default grid (InsertYard is its own
-  // checklist view, but an Insert-category card is still "in the
+  // Plain Base cards are BaseYard's own thing now (a checklist-completion
+  // game, not a "card in my collection" in the usual sense) — they only
+  // show up in the default grid's own dedicated yard, not mixed into the
+  // general list. A "CHROME BASE" second-tier card or a photo/design
+  // variation isn't a plain Base card any more (see isPureBase), so it
+  // stays in the default grid, same as Insert cards do (InsertYard is its
+  // own checklist view, but an Insert-category card is still "in the
   // collection" too). RookieYard/ValueYard/ParallelYard are unaffected:
   // their test() functions don't look at category, so a card that happens
   // to also be a rookie/numbered/autograph/relic still shows up there.
   const filteredCards = useMemo(() => {
     if (!activeYard) {
-      return filterBarCards.filter((c) => c.category !== "Base");
+      return filterBarCards.filter((c) => !isPureBase(c));
     }
     return filterBarCards.filter(activeYard.test);
   }, [filterBarCards, activeYard]);

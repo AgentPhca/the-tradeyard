@@ -15,6 +15,7 @@ import { getPublicBaseYardProgress, type BaseYardSetProgress } from "@/lib/basey
 import { getPublicInsertYardProgress } from "@/lib/insertyard/getPublicInsertYardProgress";
 import { getTeamYardProgress } from "@/lib/personalYard/getTeamYardProgress";
 import { getPlayerYardProgress } from "@/lib/personalYard/getPlayerYardProgress";
+import { isChromeBaseInsertSet, isPureBase } from "@/lib/utils/cardClassification";
 import type { Card, Wishlist } from "@/lib/types/database";
 
 // BaseYard/InsertYard are filtered out below unless the profile has opted
@@ -200,24 +201,29 @@ export default async function ProfilePage({
     // baseyard_public_visibility.sql) — a personal_collection Base card is
     // visible to any authenticated viewer once its owner has
     // show_baseyard_publicly = true, same as the progress summary below.
+    // Plain-Base-only (see lib/utils/cardClassification.ts's isPureBase) —
+    // ChecklistAlbum's own ownedByKey applies the same filter, but this
+    // avoids shipping CHROME-BASE/variation rows to the client at all.
     const { data } = await supabase
       .from("cards")
       .select("*")
       .eq("owner_id", profile.id)
       .eq("category", "Base")
+      .eq("is_variation_of_base", false)
       .neq("status", "traded");
-    baseYardAlbumCards = data ?? [];
+    baseYardAlbumCards = (data ?? []).filter((c) => !isChromeBaseInsertSet(c.insert_set));
   } else if (activeTab === "baseyard") {
     baseYardProgress = await getPublicBaseYardProgress(supabase, profile.id);
   } else if (activeTab === "insertyard" && showInsertYardAlbum) {
     // Covered by the cards RLS policy's InsertYard clause (see
-    // insertyard_public_visibility.sql).
+    // insertyard_public_visibility.sql). Broadened beyond category='Insert'
+    // — see lib/utils/cardClassification.ts's isInsert.
     const { data } = await supabase
       .from("cards")
       .select("*")
       .eq("owner_id", profile.id)
-      .not("insert_set", "is", null)
       .or("category.is.null,category.neq.Base")
+      .eq("is_variation_of_base", false)
       .neq("status", "traded");
     insertYardAlbumCards = data ?? [];
   } else if (activeTab === "insertyard") {
@@ -229,14 +235,16 @@ export default async function ProfilePage({
   } else if (activeTab === "teamyard" && profile.personal_team_yard && !isOwnProfile) {
     // Covered by the cards RLS policy's TeamYard clause (see
     // personal_yards_public_visibility.sql). teamYardProgress (for the
-    // owner's own progress bar) is already computed above.
+    // owner's own progress bar) is already computed above. "Not a plain
+    // Base card" — see lib/utils/cardClassification.ts's isPureBase,
+    // matching getTeamYardProgress.ts's own catalog filter.
     const { data } = await supabase
       .from("cards")
       .select("*")
       .eq("owner_id", profile.id)
       .eq("team", profile.personal_team_yard)
       .neq("status", "traded")
-      .or("parallel.not.is.null,insert_set.not.is.null,is_autograph.eq.true,is_relic.eq.true");
+      .or("is_variation_of_base.eq.true,category.is.null,category.neq.Base");
     teamYardAlbumCards = data ?? [];
   } else if (activeTab === "playeryard" && profile.personal_player_yard && !isOwnProfile) {
     // Covered by the cards RLS policy's PlayerYard clause (see
@@ -252,26 +260,20 @@ export default async function ProfilePage({
   } else if (!(activeTab === "collection" && collectionHiddenFromViewer)) {
     const status =
       activeTab === "trade" ? "for_trade" : activeTab === "traded" ? "traded" : "personal_collection";
-    let query = supabase
+    const { data } = await supabase
       .from("cards")
       .select("*")
       .eq("owner_id", profile.id)
-      .eq("status", status);
-    // Base cards are BaseYard's own thing (see the dedicated tab) — "My
-    // Collection" no longer mixes them in, for owner and visitors alike.
-    // Insert cards stay in this list (InsertYard is its own checklist view,
-    // but an Insert-category card is still "in the collection" too).
-    // .neq("category", "Base") alone would also silently drop every card
-    // with category = null (NULL <> 'Base' is NULL, not true, in SQL's
-    // three-valued logic) — most non-catalog-matched cards — so null has
-    // to be let through explicitly.
-    if (activeTab === "collection") {
-      query = query.or("category.is.null,category.neq.Base");
-    }
-    const { data } = await query.order(activeTab === "traded" ? "traded_at" : "created_at", {
-      ascending: false,
-    });
-    cards = data ?? [];
+      .eq("status", status)
+      .order(activeTab === "traded" ? "traded_at" : "created_at", { ascending: false });
+    // Plain Base cards are BaseYard's own thing (see the dedicated tab) —
+    // "My Collection" no longer mixes them in, for owner and visitors
+    // alike. A CHROME-BASE second-tier card or a photo/design variation
+    // isn't a plain Base card any more (see lib/utils/cardClassification
+    // .ts's isPureBase), so it stays in this list, same as Insert cards do
+    // (InsertYard is its own checklist view, but an Insert-category card
+    // is still "in the collection" too).
+    cards = activeTab === "collection" ? (data ?? []).filter((c) => !isPureBase(c)) : data ?? [];
   }
 
   const memberSince = new Date(profile.created_at).toLocaleDateString("en-US", {

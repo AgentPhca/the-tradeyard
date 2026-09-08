@@ -1,13 +1,15 @@
+import { isInsert, isParallel, type ClassifiableRow } from "@/lib/utils/cardClassification";
+
 // Derives a simple display type for a card, used by the Card Detail page's
 // "In Your Collection" tiles to badge each version at a glance. Parallel
 // takes priority over Insert/Base since it's a modifier that can apply to
 // either — a parallel of a Base card is still visually "a Parallel", not
-// "a Base".
+// "a Base". See lib/utils/cardClassification.ts for the underlying rules.
 export type CardTypeBadge = "Base" | "Insert" | "Parallel";
 
-export function deriveCardType(card: { category: string | null; parallel: string | null }): CardTypeBadge {
-  if (card.parallel) return "Parallel";
-  if (card.category === "Insert") return "Insert";
+export function deriveCardType(card: ClassifiableRow): CardTypeBadge {
+  if (isParallel(card)) return "Parallel";
+  if (isInsert(card)) return "Insert";
   return "Base";
 }
 
