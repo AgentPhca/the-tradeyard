@@ -160,7 +160,13 @@ export function TradingCard({
               src={imageUrl}
               alt={`${card.player_name} card`}
               fill
-              sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+              // Fixed widths covering the widest this tile actually renders
+              // at across every grid TradingCard appears in (Collection/
+              // Wishlist/Profile's grid-cols-2/3/4, and Marketplace's
+              // grid-cols-1/2/3/4 — the narrowest columns of each, since
+              // that's where the tile is widest), instead of a raw vw
+              // value that scales with the viewport indefinitely.
+              sizes="(min-width: 1024px) 360px, (min-width: 640px) 480px, 591px"
               className="object-cover"
             />
           ) : (

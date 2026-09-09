@@ -563,7 +563,13 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                           src={ownedCardImageUrl}
                           alt={`${displayLabel(row)} card`}
                           fill
-                          sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
+                          // Fixed widths matching this grid's actual rendered
+                          // tile size at each breakpoint (grid-cols-3/4/6 —
+                          // see the grid className below), rounded up to the
+                          // widest a tile gets within each tier, instead of
+                          // a raw vw value that lets Next.js generate a
+                          // near-unbounded range of widths.
+                          sizes="(min-width: 1024px) 175px, (min-width: 640px) 235px, 190px"
                           className="object-cover"
                         />
                       ) : (
