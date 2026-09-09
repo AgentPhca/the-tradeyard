@@ -4,8 +4,11 @@ import { Hash, PenLine, Shirt } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { BackButton } from "@/components/collection/BackButton";
-import { CardDescriptionAccordion } from "@/components/collection/CardDescriptionAccordion";
+import { CardDescriptionGrid } from "@/components/collection/CardDescriptionGrid";
 import { CardDetailActions } from "@/components/collection/CardDetailActions";
+import { CardHeaderActions } from "@/components/collection/CardHeaderActions";
+import { CardParallelStrip } from "@/components/collection/CardParallelStrip";
+import { CardStatusSelect } from "@/components/collection/CardStatusSelect";
 import { CardPhotoGallery } from "@/components/cards/CardPhotoGallery";
 import { CollectionCardTile } from "@/components/cards/CollectionCardTile";
 import { MarketplaceCardTile } from "@/components/cards/MarketplaceCardTile";
@@ -17,6 +20,7 @@ import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
 import { getParallelFrameColor, parallelFrameBackground } from "@/lib/utils/parallelFrameColor";
 import { findMultiPlayerKeys, multiPlayerKey } from "@/lib/utils/multiPlayerCard";
 import { isInsert, isPureBase } from "@/lib/utils/cardClassification";
+import { getCardParallels } from "@/lib/collection/getCardParallels";
 import type { Card } from "@/lib/types/database";
 
 // How many marketplace recommendations to aim for before falling back to
@@ -147,6 +151,8 @@ export default async function CardDetailPage({
   const isMultiPlayer = otherPlayers.length > 0;
   const displayName = isMultiPlayer ? titleCase(card.card_title || card.insert_set!) : card.player_name;
 
+  const { parallels, ownedCount } = await getCardParallels(supabase, card, user?.id ?? null);
+
   const descriptionFields: { label: string; value: string }[] = [
     { label: "Jahr", value: year },
     { label: "Set", value: card.set_name ?? "—" },
@@ -264,15 +270,18 @@ export default async function CardDetailPage({
         </div>
 
         <div className="flex-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h1 className="font-display text-[26px] uppercase leading-none tracking-wide text-text">
-              {displayName}
-            </h1>
-            {card.card_number && (
-              <span className="font-display whitespace-nowrap text-[15px] font-medium text-muted">
-                #{card.card_number}
-              </span>
-            )}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h1 className="font-display text-[26px] uppercase leading-none tracking-wide text-text">
+                {displayName}
+              </h1>
+              {card.card_number && (
+                <span className="font-display whitespace-nowrap text-[15px] font-medium text-muted">
+                  #{card.card_number}
+                </span>
+              )}
+            </div>
+            {isOwner && <CardHeaderActions cardId={card.id} playerName={card.player_name} />}
           </div>
           {card.team && <p className="mt-1.5 text-sm text-muted">{card.team}</p>}
           {card.is_rookie && (
@@ -316,7 +325,9 @@ export default async function CardDetailPage({
             </div>
           </div>
 
-          <CardDescriptionAccordion fields={descriptionFields} />
+          <CardDescriptionGrid fields={descriptionFields} />
+
+          {isOwner && <CardStatusSelect card={card} />}
 
           <Link
             href={`/profile/${owner.username}`}
@@ -333,14 +344,17 @@ export default async function CardDetailPage({
             </div>
           </Link>
 
-          <CardDetailActions
-            card={card}
-            isOwner={isOwner}
-            ownerUsername={owner.username}
-            ownerAllowsContact={owner.allow_contact}
-          />
+          {!isOwner && (
+            <CardDetailActions
+              card={card}
+              ownerUsername={owner.username}
+              ownerAllowsContact={owner.allow_contact}
+            />
+          )}
         </div>
       </div>
+
+      <CardParallelStrip parallels={parallels} ownedCount={ownedCount} />
 
       {(alsoInCollection.length > 0 || recommended.length > 0) && (
         <div className="mt-10 border-t border-[#21262D] pt-8">
