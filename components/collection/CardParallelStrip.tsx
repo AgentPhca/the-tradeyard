@@ -49,13 +49,16 @@ export function CardParallelStrip({ parallels, ownedCount }: CardParallelStripPr
 
   return (
     <div className="mt-10 border-t border-[#21262D] pt-8">
-      <div className="mb-2.5 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-bold text-text">
-          Deine <span className="text-[#E8B94A]">Parallels</span> dieser Karte
-        </h2>
-        <span className="whitespace-nowrap text-[11.5px] text-muted">
-          {ownedCount} / {parallels.length} besessen
-        </span>
+      <div className="mb-2.5">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-bold text-text">
+            Deine <span className="text-[#E8B94A]">Parallels</span> dieser Karte
+          </h2>
+          <span className="whitespace-nowrap text-[11.5px] text-muted">
+            {ownedCount} / {parallels.length} besessen
+          </span>
+        </div>
+        <p className="mt-0.5 text-[11px] text-muted">Parallels aus dem Set</p>
       </div>
 
       <div className="relative">

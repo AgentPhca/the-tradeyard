@@ -43,11 +43,19 @@ function parallelDisplayName(row: {
 
 // All known versions ("parallels") of one specific physical card — every
 // card_catalog row sharing the same (set_name, card_number, player_name)
-// slot, cross-referenced against the researched parallels reference table
-// for an authoritative print run (card_catalog's own print_run field isn't
-// reliably filled for every parallel tier — that gap is exactly why the
-// parallels table exists), colored via getParallelFrameColor, and checked
-// against the current viewer's own cards for ownership.
+// slot, matched against the researched parallels reference table for its
+// authoritative name AND print run (name/print run are NEVER taken from
+// the raw card_catalog fields anymore — see the two bugs that caused:
+// card_catalog's own naming can be wrong for a given set — e.g. Signature
+// Class's "Rookie Class Chrome Base" is really a "Refractor", the same
+// mislabeling pattern already fixed once for 2026 Flagship's Mojo cards —
+// and card_catalog.print_run has been observed holding the *product year*
+// instead of a real print run for at least one row (Chase Young #244's
+// "Golden Mirror Image Variations", which showed a bogus "/2026"). A
+// catalog row with no ladder match is left out entirely rather than shown
+// with a guessed or wrong value — incomplete is fine, wrong is not. This
+// does mean a set with a sparsely-filled parallels ladder will show fewer
+// tiers here until that ladder is filled in; that's expected, not a bug.
 //
 // Deliberately scoped to one (set_name, card_number) slot only, not a
 // set-wide "every parallel this player has across the set" sweep and not
@@ -55,7 +63,16 @@ function parallelDisplayName(row: {
 // different, unbounded question (more of a future PlayerYard feature).
 export async function getCardParallels(
   supabase: SupabaseClient<Database>,
-  card: { set_name: string | null; card_number: string | null; player_name: string },
+  card: {
+    set_name: string | null;
+    card_number: string | null;
+    player_name: string;
+    catalog_id: string | null;
+    parallel: string | null;
+    insert_set: string | null;
+    category: string | null;
+    is_variation_of_base: boolean;
+  },
   viewerId: string | null
 ): Promise<CardParallelsResult> {
   if (!card.set_name || !card.card_number || !viewerId) {
@@ -64,7 +81,7 @@ export async function getCardParallels(
 
   const { data: catalogRows } = await supabase
     .from("card_catalog")
-    .select("id, parallel, insert_set, category, is_variation_of_base, print_run")
+    .select("id, parallel, insert_set, category, is_variation_of_base")
     .eq("set_name", card.set_name)
     .eq("card_number", card.card_number)
     .eq("player_name", card.player_name);
@@ -90,10 +107,31 @@ export async function getCardParallels(
     .eq("player_name", card.player_name);
   const owned = ownedRows ?? [];
 
-  const parallels: CardParallel[] = rows.map((row) => {
-    const name = parallelDisplayName(row);
-    const ladderMatch = ladder.find((p) => namesLooselyMatch(p.parallel_name, name));
-    const printRun = ladderMatch?.print_run ?? row.print_run ?? null;
+  // The currently-viewed card's own ladder-matched name/print run, so it
+  // can be excluded from its own parallel row below (it shouldn't show up
+  // as a chip in its own strip). catalog_id is the reliable comparison
+  // when set; a manually-added card without one falls back to this
+  // name+printRun comparison instead.
+  const currentLadderMatch = ladder.find((p) =>
+    namesLooselyMatch(p.parallel_name, parallelDisplayName(card))
+  );
+
+  const parallels: CardParallel[] = [];
+
+  for (const row of rows) {
+    const candidateName = parallelDisplayName(row);
+    const ladderMatch = ladder.find((p) => namesLooselyMatch(p.parallel_name, candidateName));
+
+    // No authoritative ladder entry for this tier yet — see the module
+    // comment above for why this is skipped rather than guessed.
+    if (!ladderMatch) continue;
+
+    const isCurrentCard =
+      row.id === card.catalog_id ||
+      (!card.catalog_id &&
+        ladderMatch.parallel_name === currentLadderMatch?.parallel_name &&
+        ladderMatch.print_run === currentLadderMatch?.print_run);
+    if (isCurrentCard) continue;
 
     // catalog_id is the reliable match when set (see the catalog_id
     // backfill work); a manually-added card without one falls back to
@@ -106,14 +144,14 @@ export async function getCardParallels(
           (c.insert_set ?? null) === (row.insert_set ?? null))
     );
 
-    return {
+    parallels.push({
       catalogId: row.id,
-      name,
-      printRun,
-      color: getParallelFrameColor(name),
+      name: ladderMatch.parallel_name,
+      printRun: ladderMatch.print_run,
+      color: getParallelFrameColor(ladderMatch.parallel_name),
       owned: isOwned,
-    };
-  });
+    });
+  }
 
   // Least rare (unnumbered/"Base") first, most rare (smallest print run,
   // e.g. a 1/1) last — "ascending rarity", which is descending on the
