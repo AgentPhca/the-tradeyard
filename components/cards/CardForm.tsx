@@ -254,7 +254,8 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
         .from("card_catalog")
         .select(
           "id, player_name, team, set_name, card_number, category, insert_set, card_title, is_variation_of_base, is_rookie, is_autograph, is_relic"
-        );
+        )
+        .eq("needs_review", false);
 
       for (const filter of buildTokenOrFilters(tokens, CATALOG_SEARCH_COLUMNS)) {
         query = query.or(filter);

@@ -205,7 +205,8 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
         let query = supabase
           .from("card_catalog")
           .select("id, set_name, team, player_name, card_number, is_rookie, insert_set, card_title, class_segment")
-          .eq("is_variation_of_base", false);
+          .eq("is_variation_of_base", false)
+          .eq("needs_review", false);
 
         query =
           mode === "base"

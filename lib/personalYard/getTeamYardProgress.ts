@@ -34,6 +34,7 @@ export async function getTeamYardProgress(
       .from("card_catalog")
       .select("id, set_name, insert_set, team, player_name, card_number")
       .eq("team", team)
+      .eq("needs_review", false)
       .or("is_variation_of_base.eq.true,category.is.null,category.neq.Base")
       .range(from, from + pageSize - 1);
 

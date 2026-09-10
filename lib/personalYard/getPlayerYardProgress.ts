@@ -32,6 +32,7 @@ export async function getPlayerYardProgress(
       .from("card_catalog")
       .select("set_name, insert_set, team, player_name, card_number")
       .eq("player_name", player)
+      .eq("needs_review", false)
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];

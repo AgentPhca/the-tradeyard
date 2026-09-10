@@ -45,6 +45,7 @@ export async function getPublicBaseYardProgress(
       .select("id, set_name, team, player_name, card_number, insert_set")
       .eq("category", "Base")
       .eq("is_variation_of_base", false)
+      .eq("needs_review", false)
       .range(from, from + pageSize - 1);
 
     const page = (data ?? []).filter((row) => !isChromeBaseInsertSet(row.insert_set));

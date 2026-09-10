@@ -54,6 +54,7 @@ export async function getPublicInsertYardProgress(
       .select("id, set_name, team, player_name, insert_set, card_number")
       .or("category.is.null,category.neq.Base")
       .eq("is_variation_of_base", false)
+      .eq("needs_review", false)
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];

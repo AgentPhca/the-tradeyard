@@ -153,7 +153,8 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
           .select(
             "id, set_name, team, player_name, card_number, insert_set, card_title, parallel, is_variation_of_base, is_autograph, is_relic, print_run, category"
           )
-          .eq(mode === "team" ? "team" : "player_name", value);
+          .eq(mode === "team" ? "team" : "player_name", value)
+          .eq("needs_review", false);
 
         if (mode === "team") {
           // Non-base only — "NOT pure Base" (see lib/utils/

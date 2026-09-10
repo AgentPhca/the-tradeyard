@@ -139,7 +139,8 @@ export async function getCardParallels(
     .select("id, parallel, insert_set, category, is_variation_of_base")
     .eq("set_name", card.set_name)
     .eq("card_number", card.card_number)
-    .eq("player_name", card.player_name);
+    .eq("player_name", card.player_name)
+    .eq("needs_review", false);
 
   const rows = catalogRows ?? [];
 

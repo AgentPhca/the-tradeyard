@@ -36,6 +36,12 @@ alter table public.cards
 -- picking an Insert Set from this dropdown (as opposed to matching an
 -- exact catalog row via player search) should default to tagging the
 -- card as that plain insert, not as a Parallel/Autograph/Relic.
+--
+-- `needs_review = false` excludes catalog rows flagged as corrupted
+-- (e.g. a checklist-parsing bug that leaked the previous row's raw_line
+-- text into insert_set instead of a real product name — see
+-- fix_hide_corrupted_insert_tiles.sql) from ever surfacing as a dropdown
+-- option, without having to delete the underlying bad data.
 create or replace view public.card_catalog_insert_sets as
 select distinct on (set_name, insert_set)
   set_name,
@@ -46,6 +52,7 @@ select distinct on (set_name, insert_set)
   is_relic
 from public.card_catalog
 where insert_set is not null
+  and needs_review = false
 order by set_name, insert_set, is_variation_of_base, is_autograph, is_relic;
 
 grant select on public.card_catalog_insert_sets to authenticated;
