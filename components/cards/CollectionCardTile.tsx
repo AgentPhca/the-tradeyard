@@ -1,37 +1,43 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ImageOff } from "lucide-react";
-import { deriveCardType, CARD_TYPE_BADGE_CLASSES, CARD_TYPE_BORDER_CLASSES } from "@/lib/utils/cardType";
+import {
+  deriveCardType,
+  typeLabel,
+  CARD_TYPE_BADGE_CLASSES,
+  CARD_TYPE_BORDER_CLASSES,
+} from "@/lib/utils/cardType";
 
 interface CollectionCardTileProps {
   href: string;
   imageUrl: string | null;
   playerName: string;
-  team: string | null;
-  setName: string | null;
   category: string | null;
   is_variation_of_base: boolean;
   insert_set: string | null;
   parallel: string | null;
+  print_run: number | null;
 }
 
 // Small tile for the "In Your Collection" row on the Card Detail page —
 // other versions the same owner has of this player. Deliberately plain and
 // compact (small photo, type-coded border/badge) so it reads as "your
 // stuff", distinct from the Marketplace row's larger, seller-branded tile.
+// Subtitle shows the card's specific type (Refractor/Insert set name/Base)
+// instead of Team/Set — most cards in one player's collection share the
+// same team, and Set almost always got truncated at this tile width anyway.
 export function CollectionCardTile({
   href,
   imageUrl,
   playerName,
-  team,
-  setName,
   category,
   is_variation_of_base,
   insert_set,
   parallel,
+  print_run,
 }: CollectionCardTileProps) {
   const type = deriveCardType({ category, is_variation_of_base, insert_set, parallel });
-  const subtitle = [team, setName].filter(Boolean).join(" · ");
+  const subtitle = typeLabel({ category, is_variation_of_base, insert_set, parallel, print_run });
 
   return (
     <Link

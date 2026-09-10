@@ -19,7 +19,8 @@ import { allPhotos, coverPhoto } from "@/lib/utils/cardPhotos";
 import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
 import { getParallelFrameColor, parallelFrameBackground } from "@/lib/utils/parallelFrameColor";
 import { findMultiPlayerKeys, multiPlayerKey } from "@/lib/utils/multiPlayerCard";
-import { isInsert, isPureBase } from "@/lib/utils/cardClassification";
+import { isInsert } from "@/lib/utils/cardClassification";
+import { typeLabel } from "@/lib/utils/cardType";
 import { getCardParallels } from "@/lib/collection/getCardParallels";
 import type { Card } from "@/lib/types/database";
 
@@ -46,24 +47,6 @@ function AttrIcon({ active, icon: Icon, title }: { active: boolean; icon: Lucide
       <Icon className="h-3.5 w-3.5" />
     </div>
   );
-}
-
-// "Refractor", "Cosmic /50", "Golden Mirror Image Variations", "Base" —
-// the manually-tagged parallel name if set, else "Base" for a genuine
-// plain Base slot (ignoring a non-null insert_set that's just a PDF-
-// section heading like "BASE CARDS I" — see isPureBase), else the insert
-// set name (a real insert set, or a photo/design variation name like
-// "Golden Mirror Image Variations"), with the print run appended when
-// there is one. Shared between the meta-strip's "Typ" value and the
-// accordion's "Insert / Parallel" field so the two never disagree.
-function typeLabel(
-  card: Pick<Card, "parallel" | "insert_set" | "print_run" | "category" | "is_variation_of_base">
-): string {
-  const withPrintRun = (name: string) => (card.print_run != null ? `${name} /${card.print_run}` : name);
-  if (card.parallel) return withPrintRun(card.parallel);
-  if (isPureBase(card)) return withPrintRun("Base");
-  if (card.insert_set) return withPrintRun(titleCase(card.insert_set));
-  return withPrintRun("Base");
 }
 
 export default async function CardDetailPage({
@@ -371,12 +354,11 @@ export default async function CardDetailPage({
                     href={`/collection/${c.id}`}
                     imageUrl={coverPhoto(c)}
                     playerName={c.player_name}
-                    team={c.team}
-                    setName={c.set_name}
                     category={c.category}
                     is_variation_of_base={c.is_variation_of_base}
                     insert_set={c.insert_set}
                     parallel={c.parallel}
+                    print_run={c.print_run}
                   />
                 ))}
               </div>
