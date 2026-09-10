@@ -359,6 +359,8 @@ export default async function CardDetailPage({
                     insert_set={c.insert_set}
                     parallel={c.parallel}
                     print_run={c.print_run}
+                    is_autograph={c.is_autograph}
+                    is_relic={c.is_relic}
                   />
                 ))}
               </div>
