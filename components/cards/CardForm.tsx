@@ -162,7 +162,10 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   const [isRookie, setIsRookie] = useState(card?.is_rookie ?? false);
   const [isAutograph, setIsAutograph] = useState(card?.is_autograph ?? false);
   const [isRelic, setIsRelic] = useState(card?.is_relic ?? false);
-  const [category, setCategory] = useState<string | null>(card?.category ?? null);
+  // A brand-new, untouched form starts at the same "Base (no insert set)"
+  // state insertSet does, so category defaults to "Base" rather than null —
+  // consistent with handleInsertSetChange and the Set-change reset below.
+  const [category, setCategory] = useState<string | null>(card?.category ?? "Base");
   // The exact card_catalog row this card was created from — set only when
   // the user picks a player-search result (selectCatalogMatch), never
   // guessed at afterwards. Stays null for the "Other"/free-text path or a
@@ -361,7 +364,10 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     setIsAutograph(false);
     setIsRelic(false);
     setIsVariationOfBase(false);
-    setCategory(null);
+    // insertSet resets to "" ("Base (no insert set)"), so category follows
+    // the same rule handleInsertSetChange uses for that value — "Base",
+    // not null — until the user picks a real Insert Set.
+    setCategory("Base");
     setCatalogId(null);
     setParallel("");
     setTier("");
@@ -441,7 +447,10 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     setIsAutograph(option?.is_autograph ?? false);
     setIsRelic(option?.is_relic ?? false);
     setIsVariationOfBase(option?.is_variation_of_base ?? false);
-    setCategory(option?.category ?? null);
+    // "Base (no insert set)" (value === "") has no card_catalog_insert_sets
+    // row to read a category from — it IS the Base case, so category goes
+    // straight to "Base" instead of falling through to null.
+    setCategory(value === "" ? "Base" : option?.category ?? null);
     // card_catalog_insert_sets is a set-level aggregate view, not one
     // specific card_catalog row, so a manual Insert Set pick can no longer
     // claim to be backed by an exact catalog_id or a specific card_title
@@ -847,15 +856,6 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
               className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
             />
             Relic / patch
-          </label>
-          <label className="flex items-center gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              checked={category === "Base"}
-              onChange={(e) => setCategory(e.target.checked ? "Base" : null)}
-              className="h-4 w-4 rounded border-border bg-background text-primary focus:ring-1 focus:ring-primary"
-            />
-            Base Set
           </label>
         </div>
 
