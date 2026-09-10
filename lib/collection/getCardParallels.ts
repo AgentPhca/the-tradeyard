@@ -91,9 +91,13 @@ function parallelDisplayName(row: {
 
 // All known versions ("parallels") of one specific physical card — every
 // card_catalog row sharing the same (set_name, card_number, player_name)
-// slot, matched against the researched parallels reference table for its
-// authoritative name AND print run (name/print run are NEVER taken from
-// the raw card_catalog fields anymore — see the two bugs that caused:
+// slot, PLUS any of the viewer's own cards for that same slot that were
+// added with no catalog match at all (catalog_id IS NULL — the checklist
+// import never got around to cataloging that tier; see the second loop
+// below). Both sources are matched against the researched parallels
+// reference table for their authoritative name AND print run (name/print
+// run are NEVER taken from the raw card_catalog/cards fields themselves —
+// see the two bugs that caused:
 // card_catalog's own naming can be wrong for a given set — e.g. Signature
 // Class's "Rookie Class Chrome Base" is really a "Refractor", the same
 // mislabeling pattern already fixed once for 2026 Flagship's Mojo cards —
@@ -135,10 +139,6 @@ export async function getCardParallels(
     .eq("player_name", card.player_name);
 
   const rows = catalogRows ?? [];
-  // Only one known version of this physical card — nothing to show.
-  if (rows.length <= 1) {
-    return { parallels: [], ownedCount: 0 };
-  }
 
   const { data: ladderRows } = await supabase
     .from("parallels")
@@ -148,7 +148,7 @@ export async function getCardParallels(
 
   const { data: ownedRows } = await supabase
     .from("cards")
-    .select("catalog_id, parallel, insert_set")
+    .select("id, catalog_id, parallel, insert_set, category, is_variation_of_base")
     .eq("owner_id", viewerId)
     .eq("set_name", card.set_name)
     .eq("card_number", card.card_number)
@@ -196,6 +196,45 @@ export async function getCardParallels(
       printRun: ladderMatch.print_run,
       color: getParallelFrameColor(ladderMatch.parallel_name),
       owned: isOwned,
+    });
+  }
+
+  // A card the viewer added with no catalog match (catalog_id IS NULL) —
+  // freetext-entered because the checklist import never got around to
+  // cataloging that specific tier (confirmed live for Jayden Higgins #136
+  // 2025 Resurgence: card_catalog only has "Rookies"/"Rookie Signatures"
+  // for that slot, but the owner's own Refractor card exists with
+  // catalog_id null). It's still a real, owned version of this physical
+  // card, so it belongs in the strip too — not just whatever happened to
+  // make it into card_catalog. Matched against the same ladder as
+  // everything else above, and skipped (not guessed) when there's no
+  // ladder entry, same rule as catalog rows. Deduped against the
+  // catalog-row loop's results by matched ladder name, in case the
+  // catalog gets backfilled later and both end up pointing at the same
+  // tier.
+  const matchedNames = new Set(parallels.map((p) => p.name));
+  for (const manualRow of owned) {
+    if (manualRow.catalog_id) continue; // already covered by card_catalog above
+
+    const candidateName = parallelDisplayName(manualRow);
+    const ladderMatch = findLadderMatch(ladder, candidateName);
+    if (!ladderMatch) continue;
+
+    const isCurrentCard =
+      !card.catalog_id &&
+      ladderMatch.parallel_name === currentLadderMatch?.parallel_name &&
+      ladderMatch.print_run === currentLadderMatch?.print_run;
+    if (isCurrentCard) continue;
+
+    if (matchedNames.has(ladderMatch.parallel_name)) continue;
+    matchedNames.add(ladderMatch.parallel_name);
+
+    parallels.push({
+      catalogId: manualRow.id,
+      name: ladderMatch.parallel_name,
+      printRun: ladderMatch.print_run,
+      color: getParallelFrameColor(ladderMatch.parallel_name),
+      owned: true, // sourced from the viewer's own cards by construction
     });
   }
 
