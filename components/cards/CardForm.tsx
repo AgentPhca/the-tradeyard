@@ -578,6 +578,20 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       tradedAt = card?.status === "traded" ? (card.traded_at ?? new Date().toISOString()) : new Date().toISOString();
     }
 
+    // An Insert Set + a manually-tagged Parallel together always mean "this
+    // is a parallel version of that insert" (e.g. "1991 Topps Football" +
+    // "Silver Crackle"), never the plain insert itself — otherwise it has
+    // the same (insert_set, category) as the real insert row and collides
+    // with it under the same InsertYard slot, since isInsert() only
+    // excludes on category, not on `parallel`. Computed here at submit
+    // (rather than in the Insert Set / Parallel onChange handlers
+    // individually) since the two can be picked in either order. Doesn't
+    // apply to "Base (no insert set)" + Parallel (insertSet === "") — a
+    // numbered parallel of a plain Base card is already correctly excluded
+    // from InsertYard via category alone, and isParallel() already treats
+    // any `parallel` value as a Parallel regardless of is_variation_of_base.
+    const finalIsVariationOfBase = parallel && insertSet ? true : isVariationOfBase;
+
     const payload = {
       player_name: playerName,
       team: team || null,
@@ -585,7 +599,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       set_name: setName || null,
       insert_set: insertSet || null,
       card_title: cardTitle,
-      is_variation_of_base: isVariationOfBase,
+      is_variation_of_base: finalIsVariationOfBase,
       is_rookie: isRookie,
       parallel: parallel || null,
       serial_number: serialNumber || null,
