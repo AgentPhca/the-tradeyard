@@ -10,6 +10,9 @@ export interface CardParallel {
   printRun: number | null;
   color: ParallelFrameColor;
   owned: boolean;
+  // The viewer's own `cards.id` for this tier, so the UI can link to it —
+  // null whenever owned is false (nothing to link to).
+  ownedCardId: string | null;
 }
 
 export interface CardParallelsResult {
@@ -182,7 +185,7 @@ export async function getCardParallels(
     // catalog_id is the reliable match when set (see the catalog_id
     // backfill work); a manually-added card without one falls back to
     // matching the same parallel/insert_set naming this row itself carries.
-    const isOwned = owned.some(
+    const ownedMatch = owned.find(
       (c) =>
         c.catalog_id === row.id ||
         (!c.catalog_id &&
@@ -195,7 +198,8 @@ export async function getCardParallels(
       name: ladderMatch.parallel_name,
       printRun: ladderMatch.print_run,
       color: getParallelFrameColor(ladderMatch.parallel_name),
-      owned: isOwned,
+      owned: !!ownedMatch,
+      ownedCardId: ownedMatch?.id ?? null,
     });
   }
 
@@ -235,6 +239,7 @@ export async function getCardParallels(
       printRun: ladderMatch.print_run,
       color: getParallelFrameColor(ladderMatch.parallel_name),
       owned: true, // sourced from the viewer's own cards by construction
+      ownedCardId: manualRow.id,
     });
   }
 
