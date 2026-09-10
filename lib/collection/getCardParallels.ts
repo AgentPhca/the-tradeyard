@@ -17,17 +17,65 @@ export interface CardParallelsResult {
   ownedCount: number;
 }
 
+// A plain bidirectional `includes()` was too generous: a short, generic
+// name like "Gold" is a literal substring of plenty of unrelated longer
+// names (e.g. "Golden Mirror Image Variations" — two completely different
+// products for 2026 Flagship's Chase Young #244 — "gold" matched inside
+// "golden" even though nothing separates them). Below the minimum length,
+// fuzzy matching is skipped entirely (only an exact match counts) — even
+// a whole-word match on something that short is too easy to hit by
+// accident. Fewer than 4 characters is currently possible via
+// getParallelDisplayName's own multi-word phrases, so this only ever
+// blocks single short color words like "Red" or "Ice" from fuzzy-matching
+// at all.
+const MIN_FUZZY_MATCH_LENGTH = 4;
+
+// Whether `needle` occurs in `haystack` as a whole word/phrase — bounded
+// by \b on both ends, so "gold" no longer matches inside "golden" (no
+// boundary between the shared "gold" and the following "en"), while a
+// multi-word phrase like "mojo refractor" still matches inside "silver
+// mojo refractor" (a boundary exists on both sides: after "silver " and
+// at the end of the string).
+function containsWholeWord(haystack: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escaped}\\b`).test(haystack);
+}
+
 // The researched parallels reference table (lib/supabase/parallels.sql)
 // scales by set_name only, not insert_set, and its parallel_name is the
-// formal researched name (e.g. "Silver Mojo Refractor") which doesn't
-// always match a card_catalog row's own `parallel` string verbatim (e.g.
-// plain "Mojo Refractor"). Falls back to a case-insensitive substring
-// match in either direction — the same convention already used elsewhere
-// when wiring the Parallels table into the rest of the app.
+// formal researched name which doesn't always match a card_catalog row's
+// own `parallel`/`insert_set` string verbatim (e.g. a short nickname like
+// "Mojo Refractor" for a formally-named "Silver Mojo Refractor" listing).
+// Falls back to a whole-word/phrase match (not a raw substring check —
+// see containsWholeWord above) once both names clear the minimum length.
 function namesLooselyMatch(a: string, b: string): boolean {
   const na = a.trim().toLowerCase();
   const nb = b.trim().toLowerCase();
-  return na === nb || na.includes(nb) || nb.includes(na);
+  if (na === nb) return true;
+
+  const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
+  if (shorter.length < MIN_FUZZY_MATCH_LENGTH) return false;
+
+  return containsWholeWord(longer, shorter);
+}
+
+// Tries an exact match across the WHOLE ladder before ever falling back
+// to a fuzzy one. Array.find() alone would stop at the first fuzzy hit,
+// which can be the wrong entry: e.g. candidate "Blue Refractor" is a
+// legitimate whole-word fuzzy match for ladder entry "Refractor" too (the
+// word "refractor" appears whole in both), and if "Refractor" happens to
+// sort before "Blue Refractor" in the ladder, find() would wrongly latch
+// onto the generic "Refractor" entry despite an exact "Blue Refractor"
+// match existing later in the same set. Scanning for an exact match
+// first, across every entry, avoids that regardless of table ordering.
+function findLadderMatch<T extends { parallel_name: string }>(
+  ladder: T[],
+  candidateName: string
+): T | undefined {
+  const target = candidateName.trim().toLowerCase();
+  const exact = ladder.find((p) => p.parallel_name.trim().toLowerCase() === target);
+  if (exact) return exact;
+  return ladder.find((p) => namesLooselyMatch(p.parallel_name, candidateName));
 }
 
 function parallelDisplayName(row: {
@@ -112,15 +160,13 @@ export async function getCardParallels(
   // as a chip in its own strip). catalog_id is the reliable comparison
   // when set; a manually-added card without one falls back to this
   // name+printRun comparison instead.
-  const currentLadderMatch = ladder.find((p) =>
-    namesLooselyMatch(p.parallel_name, parallelDisplayName(card))
-  );
+  const currentLadderMatch = findLadderMatch(ladder, parallelDisplayName(card));
 
   const parallels: CardParallel[] = [];
 
   for (const row of rows) {
     const candidateName = parallelDisplayName(row);
-    const ladderMatch = ladder.find((p) => namesLooselyMatch(p.parallel_name, candidateName));
+    const ladderMatch = findLadderMatch(ladder, candidateName);
 
     // No authoritative ladder entry for this tier yet — see the module
     // comment above for why this is skipped rather than guessed.
