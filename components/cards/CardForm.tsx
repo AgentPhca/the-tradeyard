@@ -14,6 +14,7 @@ import { useParallelsForSet } from "@/lib/hooks/useParallelsForSet";
 import { parallelLabel, titleCase } from "@/lib/utils/text";
 import { buildTokenOrFilters, tokenizeSearch } from "@/lib/utils/search";
 import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
+import { isPureBase } from "@/lib/utils/cardClassification";
 import type {
   Card,
   CardCatalogEntry,
@@ -137,7 +138,13 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   const [team, setTeam] = useState(card?.team ?? "");
   const [cardNumber, setCardNumber] = useState(card?.card_number ?? "");
   const [setName, setSetName] = useState(card?.set_name ?? "");
-  const [insertSet, setInsertSet] = useState(card?.insert_set ?? "");
+  // A pure Base row's raw insert_set text (e.g. "Rookies", "Base Card I" —
+  // just a PDF-section heading from the original checklist, not a real
+  // insert set, see isPureBase) is normalized to "" here so the dropdown
+  // shows "Base (no insert set)" instead of a stale value that no longer
+  // matches any option — including for an existing card saved before this
+  // normalization existed.
+  const [insertSet, setInsertSet] = useState(card && isPureBase(card) ? "" : card?.insert_set ?? "");
   // The specific name printed on a multi-player card (e.g. "AFC Rec
   // Leaders"), copied from an exact catalog match — see
   // lib/utils/multiPlayerCard.ts. Null for single-player cards and for a
@@ -327,7 +334,11 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
         .select("set_name, insert_set, category, is_variation_of_base, is_autograph, is_relic")
         .eq("set_name", setName)
         .order("insert_set");
-      if (!cancelled) setInsertSetOptions(data ?? []);
+      // Pure-Base rows (e.g. "Rookies", "Base Card I" — a checklist PDF-
+      // section heading, not a real insert set, see isPureBase) are only
+      // ever the same thing as the fixed "Base (no insert set)" option
+      // below, so they're dropped here instead of showing up twice.
+      if (!cancelled) setInsertSetOptions((data ?? []).filter((o) => !isPureBase(o)));
     })();
 
     return () => {
@@ -408,7 +419,11 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
     setTeam(match.team ?? "");
     setCardNumber(match.card_number ?? "");
     setSetName(match.set_name);
-    setInsertSet(match.insert_set ?? "");
+    // Normalize a pure-Base match (e.g. "Rookies") to the empty "Base (no
+    // insert set)" selection instead of the raw checklist section name —
+    // same rule as the dropdown filtering above, so a suggest pick and a
+    // manual dropdown pick always agree on what "Base" looks like.
+    setInsertSet(isPureBase(match) ? "" : match.insert_set ?? "");
     setCardTitle(match.card_title ?? null);
     setIsRookie(match.is_rookie);
     setIsAutograph(match.is_autograph);
