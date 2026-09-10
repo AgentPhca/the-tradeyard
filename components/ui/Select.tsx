@@ -5,7 +5,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     return (
       <select
         ref={ref}
-        className={`w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${className}`}
+        // text-base (16px) on mobile — same iOS Safari auto-zoom-on-focus
+        // reasoning as Input.tsx.
+        className={`w-full rounded-md border border-border bg-background px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm ${className}`}
         {...props}
       />
     );

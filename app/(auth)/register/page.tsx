@@ -102,7 +102,7 @@ export default function RegisterPage() {
             id="role"
             value={role}
             onChange={(e) => setRole(e.target.value as UserRole)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
           >
             {SELECTABLE_ROLES.map((r) => (
               <option key={r} value={r}>

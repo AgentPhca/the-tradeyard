@@ -145,7 +145,7 @@ export function MessageThread({
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Type a message..."
-          className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
         />
         <button type="submit" className="btn-primary" disabled={sending || !content.trim()}>
           <Send className="h-4 w-4" />

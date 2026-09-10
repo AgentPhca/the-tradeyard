@@ -260,7 +260,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
             onChange={(e) => setBio(e.target.value)}
             rows={3}
             placeholder="Tell other collectors about yourself..."
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
           />
         </div>
 

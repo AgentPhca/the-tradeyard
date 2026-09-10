@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Oswald } from "next/font/google";
 import { Footer } from "@/components/layout/Footer";
+import { ScrollToTopOnNavigate } from "@/components/layout/ScrollToTopOnNavigate";
 import "./globals.css";
 
 const inter = Inter({
@@ -21,6 +22,17 @@ export const metadata: Metadata = {
   description: "Your trades happen on the Yard",
 };
 
+// Pinch-to-zoom is deliberately disabled (userScalable: false) for a more
+// app-like feel on mobile — combined with never letting a focusable form
+// field render below 16px (see components/ui/Input.tsx and friends),
+// which is what actually triggers iOS Safari's own auto-zoom-on-focus.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -29,6 +41,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} ${oswald.variable} bg-background font-sans text-text antialiased`}>
+        <ScrollToTopOnNavigate />
         {children}
         <Footer />
       </body>

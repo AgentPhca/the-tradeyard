@@ -245,7 +245,7 @@ export function WishlistForm() {
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
           placeholder="Any extra detail — condition, print run, what you'd trade..."
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-base text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
         />
       </div>
 
