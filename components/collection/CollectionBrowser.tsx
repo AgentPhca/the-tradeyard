@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   LayoutGrid,
   Layers,
+  Search,
   Shapes,
   Sparkles,
   Star,
@@ -16,6 +17,7 @@ import { TradingCard } from "@/components/cards/TradingCard";
 import { FilterSelectRow, type FilterSelectOption } from "@/components/cards/FilterSelectRow";
 import { ChecklistAlbum } from "@/components/collection/ChecklistAlbum";
 import { PersonalYardAlbum } from "@/components/collection/PersonalYardAlbum";
+import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { titleCase } from "@/lib/utils/text";
 import { isInsert, isParallel, isPureBase } from "@/lib/utils/cardClassification";
@@ -197,6 +199,7 @@ export function CollectionBrowser({
     router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
   }
 
+  const [search, setSearch] = useState("");
   const [team, setTeam] = useState("");
   const [setName, setSetName] = useState("");
   const [insertSet, setInsertSet] = useState("");
@@ -242,17 +245,29 @@ export function CollectionBrowser({
 
   // Cards after the (always-visible) filter bar, before the active yard is
   // applied — used both for the final grid and for the yard tile counts, so
-  // a filter-bar selection (e.g. a team) narrows what each yard's counter
-  // shows too.
+  // a filter-bar selection (e.g. a team, or now a text search) narrows what
+  // each yard's counter shows too.
   const filterBarCards = useMemo(() => {
+    const query = search.trim().toLowerCase();
     return cards.filter((card) => {
       if (team && card.team !== team) return false;
       if (setName && card.set_name !== setName) return false;
       if (insertSet && card.insert_set !== insertSet) return false;
       if (parallel && card.parallel !== parallel) return false;
+      if (query) {
+        const haystack = [
+          card.player_name,
+          card.team,
+          card.set_name,
+          card.card_number,
+          card.insert_set,
+          card.parallel,
+        ];
+        if (!haystack.some((value) => value?.toLowerCase().includes(query))) return false;
+      }
       return true;
     });
-  }, [cards, team, setName, insertSet, parallel]);
+  }, [cards, team, setName, insertSet, parallel, search]);
 
   const yardCounts = useMemo(() => {
     const counts = new Map<YardKey, number>();
@@ -393,6 +408,15 @@ export function CollectionBrowser({
       ) : (
         <>
           <div className="mb-6 rounded-lg border border-border bg-surface p-4">
+            <div className="relative mb-3">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Input
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search player, team, set..."
+              />
+            </div>
             <FilterSelectRow
               team={team}
               onTeamChange={setTeam}
