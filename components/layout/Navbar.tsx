@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Heart, LayoutDashboard, Layers, Mail, Store } from "lucide-react";
+import { Heart, LayoutDashboard, Layers, Mail, Search, Store } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ProfileMenu } from "@/components/layout/ProfileMenu";
 import { createClient } from "@/lib/supabase/client";
@@ -93,6 +93,18 @@ export function Navbar({
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/search"
+            title="Search"
+            className={`rounded-md p-2 transition-colors ${
+              pathname?.startsWith("/search")
+                ? "bg-card text-text"
+                : "text-muted hover:bg-surface hover:text-text"
+            }`}
+          >
+            <Search className="h-5 w-5" />
+          </Link>
+
           <Link
             href="/messages"
             title="Messages"
