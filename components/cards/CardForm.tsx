@@ -578,19 +578,19 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
       tradedAt = card?.status === "traded" ? (card.traded_at ?? new Date().toISOString()) : new Date().toISOString();
     }
 
-    // An Insert Set + a manually-tagged Parallel together always mean "this
-    // is a parallel version of that insert" (e.g. "1991 Topps Football" +
-    // "Silver Crackle"), never the plain insert itself — otherwise it has
-    // the same (insert_set, category) as the real insert row and collides
-    // with it under the same InsertYard slot, since isInsert() only
-    // excludes on category, not on `parallel`. Computed here at submit
-    // (rather than in the Insert Set / Parallel onChange handlers
-    // individually) since the two can be picked in either order. Doesn't
-    // apply to "Base (no insert set)" + Parallel (insertSet === "") — a
-    // numbered parallel of a plain Base card is already correctly excluded
-    // from InsertYard via category alone, and isParallel() already treats
-    // any `parallel` value as a Parallel regardless of is_variation_of_base.
-    const finalIsVariationOfBase = parallel && insertSet ? true : isVariationOfBase;
+    // A manually-tagged Parallel always means this card is a parallel
+    // VERSION of whatever it's a parallel of — an Insert Set (e.g. "1991
+    // Topps Football" + "Silver Crackle") or a plain Base card (e.g.
+    // "Black /70" with no Insert Set at all) — never the plain insert/base
+    // itself, regardless of whether an Insert Set is also chosen. Without
+    // this, a Parallel-of-Insert card collides with the real insert under
+    // the same InsertYard slot (isInsert() only excludes on category, not
+    // on `parallel`), and a Parallel-of-Base card collides with the real
+    // base card under the same BaseYard slot (isPureBase() has the same
+    // gap). Computed here at submit (rather than in the Insert Set /
+    // Parallel onChange handlers individually) since the two can be picked
+    // in either order, and Parallel alone is enough on its own.
+    const finalIsVariationOfBase = parallel ? true : isVariationOfBase;
 
     const payload = {
       player_name: playerName,
