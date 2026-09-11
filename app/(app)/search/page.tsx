@@ -100,12 +100,6 @@ export default async function SearchPage({
     }
   }
 
-  const noResults =
-    q.length > 0 &&
-    collectionCards.length === 0 &&
-    marketplaceCards.length === 0 &&
-    wishlistRows.length === 0;
-
   return (
     <div>
       <div className="mb-6">
@@ -128,18 +122,15 @@ export default async function SearchPage({
         />
       </form>
 
-      {q.length === 0 ? null : noResults ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
-          <SearchIcon className="h-8 w-8 text-muted" />
-          <p className="mt-4 text-sm text-muted">No cards match &ldquo;{q}&rdquo;.</p>
-        </div>
-      ) : (
+      {q.length > 0 && (
         <div className="flex flex-col gap-10">
-          {collectionCards.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-lg font-semibold text-text">
-                Your Collection ({collectionCards.length})
-              </h2>
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-text">
+              Your Collection ({collectionCards.length})
+            </h2>
+            {collectionCards.length === 0 ? (
+              <p className="text-sm text-muted">No matches in your collection.</p>
+            ) : (
               <div className="flex flex-wrap gap-3">
                 {collectionCards.map((card) => (
                   <CollectionCardTile
@@ -157,14 +148,16 @@ export default async function SearchPage({
                   />
                 ))}
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
-          {marketplaceCards.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-lg font-semibold text-text">
-                Marketplace ({marketplaceCards.length})
-              </h2>
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-text">
+              Marketplace ({marketplaceCards.length})
+            </h2>
+            {marketplaceCards.length === 0 ? (
+              <p className="text-sm text-muted">No matches in the Marketplace.</p>
+            ) : (
               <div className="flex flex-wrap gap-3">
                 {marketplaceCards.map((card) => {
                   const seller = profileById.get(card.owner_id);
@@ -184,14 +177,16 @@ export default async function SearchPage({
                   );
                 })}
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
-          {wishlistRows.length > 0 && (
-            <section>
-              <h2 className="mb-3 text-lg font-semibold text-text">
-                Looking For ({wishlistRows.length})
-              </h2>
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-text">
+              Looking For ({wishlistRows.length})
+            </h2>
+            {wishlistRows.length === 0 ? (
+              <p className="text-sm text-muted">No one is looking for this yet.</p>
+            ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {wishlistRows.map((entry) => {
                   const requester = profileById.get(entry.user_id);
@@ -206,8 +201,8 @@ export default async function SearchPage({
                   );
                 })}
               </div>
-            </section>
-          )}
+            )}
+          </section>
         </div>
       )}
     </div>
