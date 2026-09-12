@@ -343,9 +343,13 @@ export default async function CardDetailPage({
         <div className="mt-10 border-t border-[#21262D] pt-8">
           {alsoInCollection.length > 0 && (
             <div>
-              <h2 className="text-lg font-semibold text-text">In Your Collection</h2>
+              <h2 className="text-lg font-semibold text-text">
+                {isOwner ? "In Your Collection" : `In ${owner.username}'s Collection`}
+              </h2>
               <p className="mb-3 mt-0.5 text-sm text-muted">
-                You own {alsoInCollection.length + 1} versions of {card.player_name}
+                {isOwner
+                  ? `You own ${alsoInCollection.length + 1} versions of ${card.player_name}`
+                  : `${owner.username} owns ${alsoInCollection.length + 1} versions of ${card.player_name}`}
               </p>
               <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
                 {alsoInCollection.map((c) => (
