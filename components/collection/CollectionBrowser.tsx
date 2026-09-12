@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  ArrowUp,
   LayoutGrid,
   Layers,
   Search,
@@ -205,6 +206,24 @@ export function CollectionBrowser({
   const [insertSet, setInsertSet] = useState("");
   const [parallel, setParallel] = useState("");
   const [sort, setSort] = useState<SortKey>("recent");
+
+  // Floating "back to top" button — this page (yard tiles, filter bar,
+  // card grid) can run long, so it only appears once there's meaningfully
+  // far to scroll back, rather than cluttering the view from the top. Also
+  // hidden near the very bottom of the page, since its fixed bottom-right
+  // position would otherwise sit right on top of the site Footer's own
+  // legal links (worst on mobile, where the footer centers that row
+  // instead of pushing it to the right edge).
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    function handleScroll() {
+      const nearBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 150;
+      setShowScrollTop(window.scrollY > 400 && !nearBottom);
+    }
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   function handleSetChange(value: string) {
     setSetName(value);
@@ -466,6 +485,17 @@ export function CollectionBrowser({
             </div>
           )}
         </>
+      )}
+
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          title="Back to top"
+          className="fixed bottom-6 right-6 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-text shadow-lg transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </button>
       )}
     </div>
   );
