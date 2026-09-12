@@ -640,16 +640,37 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
         Back to Collection
       </Link>
 
-      <h1 className="text-2xl font-bold text-text">
-        {mode === "edit" ? "Edit Card" : "Add a Card"}
-      </h1>
-      <p className="mt-1 text-sm text-muted">
+      {/* top offset matches Navbar's rendered height — 118px on mobile
+          (top row + the extra horizontally-scrolling nav-link row that
+          only exists below sm:), 64px (top-16) at sm: and up once that
+          second row disappears. Without this, the sticky bar would stick
+          underneath the still-sticky Navbar instead of just below it. */}
+      <div className="sticky top-[118px] z-30 -mx-6 flex items-center justify-between gap-3 border-b border-border bg-background px-6 py-3 sm:top-16 sm:mx-0 sm:px-0">
+        <h1 className="text-2xl font-bold text-text">
+          {mode === "edit" ? "Edit Card" : "Add a Card"}
+        </h1>
+        <button
+          type="submit"
+          form="card-form"
+          className="btn-primary shrink-0"
+          disabled={submitting}
+        >
+          {mode === "edit"
+            ? submitting
+              ? "Saving..."
+              : "Save"
+            : submitting
+              ? "Adding..."
+              : "Save"}
+        </button>
+      </div>
+      <p className="mt-3 text-sm text-muted">
         {mode === "edit"
           ? "Update this card's details, photo, or trade status."
           : "Add a card to your collection, or list it as available for trade."}
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+      <form id="card-form" onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
         <div>
           <label className="mb-1.5 block text-sm font-medium text-text">Photos</label>
           <div className="flex flex-wrap gap-3">
