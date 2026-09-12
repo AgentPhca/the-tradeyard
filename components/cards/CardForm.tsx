@@ -128,9 +128,14 @@ interface CardFormProps {
   // Add Card passes the BaseYard Set+Team the user came from (if any) so
   // saving doesn't strand them back on the generic collection view.
   returnTo?: string;
+  // Prefills the Status field instead of the usual personal_collection
+  // default — used by the "Looking For" success CTA (?status=for_trade)
+  // to land here with a trade offer already selected. Ignored once an
+  // existing card's own status (edit mode) applies instead.
+  initialStatus?: CardStatus;
 }
 
-export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormProps) {
+export function CardForm({ mode, card, initialCatalogId, returnTo, initialStatus }: CardFormProps) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -171,7 +176,9 @@ export function CardForm({ mode, card, initialCatalogId, returnTo }: CardFormPro
   // guessed at afterwards. Stays null for the "Other"/free-text path or a
   // search with no match, same as category/is_rookie in that case.
   const [catalogId, setCatalogId] = useState<string | null>(card?.catalog_id ?? null);
-  const [status, setStatus] = useState<CardStatus>(card?.status ?? "personal_collection");
+  const [status, setStatus] = useState<CardStatus>(
+    card?.status ?? initialStatus ?? "personal_collection"
+  );
   const [photos, setPhotos] = useState<PhotoSlot[]>(() => {
     const existingUrls = card?.image_urls?.length ? card.image_urls : card?.image_url ? [card.image_url] : [];
     return existingUrls.map((url) => ({ key: url, previewUrl: url }));

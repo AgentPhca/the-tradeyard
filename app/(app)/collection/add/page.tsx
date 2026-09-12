@@ -1,4 +1,5 @@
 import { CardForm } from "@/components/cards/CardForm";
+import type { CardStatus } from "@/lib/types/database";
 
 export default async function AddCardPage({
   searchParams,
@@ -10,9 +11,22 @@ export default async function AddCardPage({
     insertSet?: string;
     personalTeam?: string;
     personalPlayer?: string;
+    status?: string;
   }>;
 }) {
-  const { catalogId, set, team, insertSet, personalTeam, personalPlayer } = await searchParams;
+  const { catalogId, set, team, insertSet, personalTeam, personalPlayer, status } =
+    await searchParams;
+
+  // From the "Looking For" success CTA (?status=for_trade) — starts the
+  // form with a trade offer already selected instead of the usual
+  // personal_collection default, since that's the whole point of arriving
+  // here from that link. Validated against the real CardStatus values
+  // rather than passed through as a raw string, since it's untrusted
+  // user-controlled query-param input.
+  const initialStatus: CardStatus | undefined =
+    status === "for_trade" || status === "personal_collection" || status === "traded"
+      ? status
+      : undefined;
 
   // Coming from a checklist album's empty slot (?set=&team= for BaseYard,
   // ?set=&insertSet= for InsertYard, ?set=&personalTeam=/&personalPlayer=
@@ -33,5 +47,12 @@ export default async function AddCardPage({
     returnTo = `/collection?yard=playeryard&playerYardSet=${encodeURIComponent(set)}`;
   }
 
-  return <CardForm mode="create" initialCatalogId={catalogId} returnTo={returnTo} />;
+  return (
+    <CardForm
+      mode="create"
+      initialCatalogId={catalogId}
+      returnTo={returnTo}
+      initialStatus={initialStatus}
+    />
+  );
 }
