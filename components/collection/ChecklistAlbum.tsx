@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronDown, ChevronUp, ImageOff, Lock } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, ImageOff, ListPlus, Lock } from "lucide-react";
 import { Select } from "@/components/ui/Select";
 import { createClient } from "@/lib/supabase/client";
 import { NFL_DIVISIONS } from "@/lib/data/nflDivisions";
@@ -74,6 +74,19 @@ function tierLabel(row: ChecklistCatalogRow): string | null {
   if (insertSet.endsWith("UNCOMMON")) return "Uncommon";
   if (insertSet.endsWith("COMMON")) return "Common";
   return null;
+}
+
+// Identifies a wishlist entry by the same fields a one-click "add to
+// Looking For" insert writes, so an already-requested slot can be
+// recognized both right after adding it and after a page reload (matched
+// against the user's existing wishlist rows, fetched once on mount).
+function wishlistKey(
+  playerName: string,
+  team: string | null,
+  setNameValue: string | null,
+  insertSetValue: string | null
+): string {
+  return `${playerName}|${team ?? ""}|${setNameValue ?? ""}|${insertSetValue ?? ""}`;
 }
 
 // A subtle diagonal hatch, built from the muted token (#8B949E) rather than
@@ -151,6 +164,66 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     return division?.name ?? null;
   });
   const [defaultSetPicked, setDefaultSetPicked] = useState(Boolean(urlSet));
+
+  // One-click "add to Looking For" from an empty slot — lets a user missing
+  // just one card from a team/insert set flag it without leaving the
+  // checklist. Only relevant when this is the owner's own album (readOnly
+  // viewers can't add wishlist entries on someone else's behalf), so the
+  // fetch is skipped entirely there. Loaded once per album so a slot
+  // already requested on an earlier visit shows as such immediately,
+  // rather than only after this session's own click.
+  const [wishlistedKeys, setWishlistedKeys] = useState<Set<string>>(new Set());
+  const [addingWishlistKey, setAddingWishlistKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (readOnly) return;
+    let cancelled = false;
+
+    (async () => {
+      const { data } = await supabase
+        .from("wishlist")
+        .select("player_name, team, set_name, insert_set")
+        .eq("user_id", targetUserId);
+      if (!cancelled && data) {
+        setWishlistedKeys(
+          new Set(data.map((w) => wishlistKey(w.player_name, w.team, w.set_name, w.insert_set)))
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, targetUserId]);
+
+  async function handleAddToWishlist(playerName: string, row: ChecklistCatalogRow) {
+    const key = wishlistKey(playerName, row.team, setName, mode === "insert" ? groupValue : null);
+    if (wishlistedKeys.has(key) || addingWishlistKey) return;
+    setAddingWishlistKey(key);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setAddingWishlistKey(null);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("wishlist").insert({
+      user_id: user.id,
+      player_name: playerName,
+      team: row.team || null,
+      set_name: setName || null,
+      insert_set: mode === "insert" ? groupValue || null : null,
+    });
+
+    if (!insertError) {
+      setWishlistedKeys((prev) => new Set(prev).add(key));
+    }
+    setAddingWishlistKey(null);
+  }
 
   function updateAlbumParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -652,14 +725,42 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
                   ? `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(groupValue)}`
                   : `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&insertSet=${encodeURIComponent(groupValue)}`;
 
+              const wishlistLabel = displayLabel(row);
+              const slotWishlistKey = wishlistKey(
+                wishlistLabel,
+                row.team,
+                setName,
+                mode === "insert" ? groupValue : null
+              );
+              const isWishlisted = wishlistedKeys.has(slotWishlistKey);
+              const isAddingWishlist = addingWishlistKey === slotWishlistKey;
+
               return (
-                <Link
-                  key={slot.key}
-                  href={addCardHref}
-                  className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
-                >
-                  {lockedTileContent}
-                </Link>
+                <div key={slot.key} className="relative">
+                  <Link
+                    href={addCardHref}
+                    className="flex flex-col overflow-hidden rounded-lg border border-dashed border-border bg-surface transition-colors hover:border-primary/40"
+                  >
+                    {lockedTileContent}
+                  </Link>
+                  <button
+                    type="button"
+                    title={isWishlisted ? "Already on your Looking For list" : "Add to Looking For"}
+                    disabled={isWishlisted || isAddingWishlist}
+                    onClick={() => handleAddToWishlist(wishlistLabel, row)}
+                    className={`absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
+                      isWishlisted
+                        ? "border-primary/40 bg-primary/20 text-primary"
+                        : "border-border bg-surface text-muted hover:border-primary/40 hover:text-primary disabled:opacity-60"
+                    }`}
+                  >
+                    {isWishlisted ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <ListPlus className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
               );
             })}
           </div>
