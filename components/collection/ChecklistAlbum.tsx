@@ -100,6 +100,15 @@ const lockedPatternStyle = {
 const tileInactiveClass = "border-border bg-surface text-muted hover:border-primary/40 hover:text-text";
 const tileSelectedClass = "border-primary/30 bg-primary/10 text-primary";
 
+// Below this many options, the Insert Set grid is short enough on its own
+// that collapsing it after a pick would just add a click to see something
+// that was already right there — so it stays a plain grid the whole time.
+// Above it (2026 Flagship's 40+ inserts is the motivating case), a picked
+// grid collapses into a one-line summary. Not user-configurable; picked as
+// a reasonable middle ground between "a couple of inserts" and "a wall of
+// dozens."
+const INSERT_PICKER_COLLAPSE_THRESHOLD = 6;
+
 type ChecklistMode = "base" | "insert";
 
 interface ChecklistAlbumProps {
@@ -164,6 +173,17 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     return division?.name ?? null;
   });
   const [defaultSetPicked, setDefaultSetPicked] = useState(Boolean(urlSet));
+
+  // InsertYard only: a big Set (2026 Flagship has 40+ inserts) turns the
+  // full Insert Set grid into a wall the user has to scroll past twice
+  // before the actual album is even visible. Starts expanded unless a
+  // group is already selected via a deep link (?insertYardInsert=...),
+  // collapses automatically once a selection is made (handleGroupClick),
+  // and can be re-expanded by clicking the summary row. Only ever offered
+  // when there are enough options that collapsing actually helps — see
+  // INSERT_PICKER_COLLAPSE_THRESHOLD below; a short list just stays as a
+  // grid the whole time, same as before this feature existed.
+  const [insertPickerExpanded, setInsertPickerExpanded] = useState(!urlGroup);
 
   // One-click "add to Looking For" from an empty slot — lets a user missing
   // just one card from a team/insert set flag it without leaving the
@@ -344,6 +364,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     setSetName(value);
     setGroupValue("");
     setActiveDivision(null);
+    setInsertPickerExpanded(true);
     updateAlbumParams({ [setParamKey]: value, [groupParamKey]: "" });
   }
 
@@ -367,6 +388,13 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
     const next = groupValue === value ? "" : value;
     setGroupValue(next);
     updateAlbumParams({ [setParamKey]: setName, [groupParamKey]: next });
+    // InsertYard only (BaseYard's team picker keeps its own division
+    // accordion, untouched here): collapse the grid once a pick is made,
+    // and re-expand it if the pick is cleared (clicking the same chip
+    // again) — back to "no selection", the same state this starts in.
+    if (mode === "insert" && insertSetOptions.length > INSERT_PICKER_COLLAPSE_THRESHOLD) {
+      setInsertPickerExpanded(!next);
+    }
   }
 
   const rowsInSet = useMemo(
@@ -563,6 +591,27 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
           <label className="mb-1.5 block text-sm font-medium text-text">Insert Set</label>
           {insertSetOptions.length === 0 ? (
             <p className="text-sm text-muted">No insert sets found for this set.</p>
+          ) : groupValue &&
+            !insertPickerExpanded &&
+            insertSetOptions.length > INSERT_PICKER_COLLAPSE_THRESHOLD ? (
+            <button
+              type="button"
+              onClick={() => setInsertPickerExpanded(true)}
+              className="flex min-h-11 w-full items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-left text-sm font-medium text-primary transition-colors hover:border-primary/50"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{groupValue}</span>
+                {isGroupComplete(groupValue) && (
+                  <span
+                    title="100% collected"
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                  >
+                    <Check className="h-2.5 w-2.5" />
+                  </span>
+                )}
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0" />
+            </button>
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {insertSetOptions.map((option) => {
