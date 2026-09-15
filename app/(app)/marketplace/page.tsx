@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { Plus, Store } from "lucide-react";
-import { TradingCard } from "@/components/cards/TradingCard";
+import { MarketplaceCardGrid } from "@/components/marketplace/MarketplaceCardGrid";
 import { MarketplaceFilters } from "@/components/marketplace/MarketplaceFilters";
 import { WishlistRequestCard } from "@/components/wishlist/WishlistRequestCard";
 import { createClient } from "@/lib/supabase/server";
@@ -180,23 +180,20 @@ export default async function MarketplacePage({
             <p className="mt-4 text-sm text-muted">No cards match your filters right now.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {cards.map((card) => {
+          <MarketplaceCardGrid
+            items={cards.map((card) => {
               const owner = ownerById.get(card.owner_id);
-              return (
-                <TradingCard
-                  key={card.id}
-                  card={card}
-                  isOwner={card.owner_id === user?.id}
-                  showSaveButton={Boolean(user)}
-                  isSaved={savedCardIds.has(card.id)}
-                  ownerUsername={owner?.username}
-                  ownerAvatarUrl={owner?.avatar_url}
-                  ownerAllowsContact={owner?.allow_contact ?? true}
-                />
-              );
+              return {
+                card,
+                isOwner: card.owner_id === user?.id,
+                showSaveButton: Boolean(user),
+                isSaved: savedCardIds.has(card.id),
+                ownerUsername: owner?.username,
+                ownerAvatarUrl: owner?.avatar_url,
+                ownerAllowsContact: owner?.allow_contact ?? true,
+              };
             })}
-          </div>
+          />
         )
       ) : wishlistRows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface py-24 text-center">
