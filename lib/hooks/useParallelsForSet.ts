@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { sanitizeSearchToken } from "@/lib/utils/search";
 import type { Parallel } from "@/lib/types/database";
 
 // The two sets whose parallel_name alone is ambiguous — see
@@ -30,10 +31,24 @@ interface UseParallelsForSetResult {
 // Add Card and Wishlist forms. Pass `tier`/`baseType` once the caller has
 // them selected; before that, `parallels` is empty for those two sets
 // (same "pick tier/base type first" gating both forms already need).
+//
+// `insertSet` scopes the query itself (rather than a client-side filter
+// like tier/baseType) to broadly-applicable rows (insert_set is null) plus
+// whichever insert set is passed — an insert-only ladder like Mojo or
+// Pressure Cookers should never appear while editing a card from a
+// different insert, or a plain Base card. Only applied when a caller
+// passes it AT ALL: MarketplaceFilters and the Wishlist form call this
+// without an insertSet concept and want every parallel for the set
+// (including every insert-specific ladder) to dedupe/filter themselves, so
+// leaving the 4th argument out — `insertSet === undefined` — skips this
+// filter entirely for them. CardForm always passes its own insertSet
+// state, including "" for a plain Base card, which then shows only the
+// broadly-applicable rows.
 export function useParallelsForSet(
   setName: string,
   tier?: string,
-  baseType?: string
+  baseType?: string,
+  insertSet?: string
 ): UseParallelsForSetResult {
   const supabase = createClient();
   const [rawParallels, setRawParallels] = useState<Parallel[]>([]);
@@ -47,11 +62,20 @@ export function useParallelsForSet(
     let cancelled = false;
 
     (async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("parallels")
-        .select("id, set_name, parallel_name, print_run, sku_exclusivity, tier, base_type, sort_order")
-        .eq("set_name", setName)
-        .order("sort_order");
+        .select(
+          "id, set_name, parallel_name, print_run, sku_exclusivity, tier, base_type, insert_set, sort_order"
+        )
+        .eq("set_name", setName);
+
+      if (insertSet !== undefined) {
+        query = insertSet
+          ? query.or(`insert_set.is.null,insert_set.eq.${sanitizeSearchToken(insertSet)}`)
+          : query.is("insert_set", null);
+      }
+
+      const { data } = await query.order("sort_order");
       if (!cancelled) setRawParallels(data ?? []);
     })();
 
@@ -59,7 +83,7 @@ export function useParallelsForSet(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setName]);
+  }, [setName, insertSet]);
 
   const isFinestSet = setName === FINEST_SET_NAME;
   const isSignatureClassSet = setName === SIGNATURE_CLASS_SET_NAME;

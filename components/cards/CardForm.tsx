@@ -405,7 +405,8 @@ export function CardForm({ mode, card, initialCatalogId, returnTo, initialStatus
   const { parallels: filteredParallels, isFinestSet, isSignatureClassSet } = useParallelsForSet(
     setName,
     tier,
-    baseType
+    baseType,
+    insertSet
   );
 
   const parallelDisabled =

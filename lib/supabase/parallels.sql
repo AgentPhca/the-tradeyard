@@ -7,14 +7,18 @@
 -- same convention as card_catalog_insert_sets — there is no `sets` table
 -- with a surrogate key in this schema).
 --
--- Two sets need an extra selector before the parallel dropdown makes
+-- A few sets need an extra selector before the parallel dropdown makes
 -- sense, since the same parallel_name means different things depending on
 -- it:
 --   - Finest: `tier` ('Common' | 'Uncommon' | 'Rare') — the same color name
 --     carries a different print run per tier.
 --   - Signature Class: `base_type` ('Chrome' | 'Paper') — each card exists
 --     in both versions with a distinct parallel ladder.
--- Both columns are null for every other set.
+--   - Any set with insert-specific ladders (e.g. 2026 Topps Flagship
+--     Football's "PRESSURE COOKERS" or "1991 Topps Football Chrome"):
+--     `insert_set` scopes a row to that one insert — null means it applies
+--     broadly across the whole set. See add_parallels_insert_set_scoping.sql.
+-- All three columns are null for a set/row that doesn't need that split.
 --
 -- Run this file first, then parallels_seed_real_parallel_data.sql to load
 -- the base-card parallel data. Insert-set-specific parallel ladders (which
@@ -29,6 +33,7 @@ create table public.parallels (
   sku_exclusivity text,
   tier text,
   base_type text,
+  insert_set text,
   sort_order integer not null
 );
 

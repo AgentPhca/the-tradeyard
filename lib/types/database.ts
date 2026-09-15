@@ -181,6 +181,11 @@ export type Parallel = {
   sku_exclusivity: string | null;
   tier: string | null;
   base_type: string | null;
+  // Scopes an insert-specific parallel ladder (e.g. "PRESSURE COOKERS",
+  // "1991 Topps Football Chrome") to that one insert set — null means it
+  // applies broadly across the whole set, same null-is-universal
+  // convention as tier/base_type. See lib/supabase/parallels.sql.
+  insert_set: string | null;
   sort_order: number;
 };
 
