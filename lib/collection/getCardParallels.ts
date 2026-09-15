@@ -94,10 +94,22 @@ function parallelDisplayName(row: {
 
 // All known versions ("parallels") of one specific physical card — every
 // card_catalog row sharing the same (set_name, card_number, player_name)
-// slot, PLUS any of the viewer's own cards for that same slot that were
-// added with no catalog match at all (catalog_id IS NULL — the checklist
-// import never got around to cataloging that tier; see the second loop
-// below). Both sources are matched against the researched parallels
+// slot, PLUS any of the viewer's own cards for that same slot whose
+// resolved name isn't already covered by one of those catalog rows (see
+// the second loop below). That "not already covered" case comes in two
+// flavors:
+//   - catalog_id IS NULL: the checklist import never got around to
+//     cataloging that tier at all (e.g. Jayden Higgins #136 2025
+//     Resurgence's Refractor).
+//   - catalog_id IS SET, but to a catalog row for a DIFFERENT tier: the
+//     catalog can have just one row for a card number, so a parallel of
+//     it gets linked to that same row for lack of a better match (e.g.
+//     Baker Mayfield #PC-26 2026 Flagship: the catalog's one Pressure
+//     Cookers row has no Pink Diamante counterpart, so the owner's Pink
+//     Diamante card shares its catalog_id anyway). A row's catalog_id
+//     therefore can't be trusted alone to mean "this owned card is
+//     already represented" — only a matching resolved ladder name does.
+// Both sources are matched against the researched parallels
 // reference table for their authoritative name AND print run (name/print
 // run are NEVER taken from the raw card_catalog/cards fields themselves —
 // see the two bugs that caused:
@@ -204,33 +216,42 @@ export async function getCardParallels(
     });
   }
 
-  // A card the viewer added with no catalog match (catalog_id IS NULL) —
-  // freetext-entered because the checklist import never got around to
-  // cataloging that specific tier (confirmed live for Jayden Higgins #136
-  // 2025 Resurgence: card_catalog only has "Rookies"/"Rookie Signatures"
-  // for that slot, but the owner's own Refractor card exists with
-  // catalog_id null). It's still a real, owned version of this physical
-  // card, so it belongs in the strip too — not just whatever happened to
-  // make it into card_catalog. Matched against the same ladder as
+  // The viewer's own cards for this slot that the first loop didn't
+  // already cover — either genuinely uncataloged (catalog_id IS NULL,
+  // e.g. Jayden Higgins #136 2025 Resurgence's Refractor, freetext-entered
+  // because the checklist import never got around to cataloging that
+  // tier), or one whose catalog_id points at a DIFFERENT tier's row for
+  // lack of a better match (e.g. Baker Mayfield #PC-26 2026 Flagship's
+  // Pink Diamante parallel, sharing its catalog_id with the plain
+  // Pressure Cookers row since no catalog row exists for Pink Diamante
+  // specifically) — deliberately NOT skipped just because catalog_id is
+  // set, since that alone doesn't mean this row's tier was already
+  // represented by the first loop. Both cases are still real, owned
+  // versions of this physical card, so they belong in the strip too — not
+  // just whatever happened to make it into card_catalog, or happened to
+  // get linked to the same catalog_id. Matched against the same ladder as
   // everything else above, and skipped (not guessed) when there's no
-  // ladder entry, same rule as catalog rows. Deduped against the
-  // catalog-row loop's results by matched ladder name, in case the
-  // catalog gets backfilled later and both end up pointing at the same
-  // tier.
+  // ladder entry, same rule as catalog rows.
   const matchedNames = new Set(parallels.map((p) => p.name));
   for (const manualRow of owned) {
-    if (manualRow.catalog_id) continue; // already covered by card_catalog above
-
     const candidateName = parallelDisplayName(manualRow);
     const ladderMatch = findLadderMatch(ladder, candidateName);
     if (!ladderMatch) continue;
 
+    // Compared by resolved ladder name/print run, not `!card.catalog_id`
+    // like the first loop's version of this check — a shared catalog_id
+    // (the Pink Diamante case above) means `card.catalog_id` can be set
+    // AND this very row can still be the one actually being viewed (its
+    // own entry in `owned`), which this needs to catch to correctly
+    // exclude itself from its own parallels strip.
     const isCurrentCard =
-      !card.catalog_id &&
       ladderMatch.parallel_name === currentLadderMatch?.parallel_name &&
       ladderMatch.print_run === currentLadderMatch?.print_run;
     if (isCurrentCard) continue;
 
+    // Deduped against the first loop's results by matched ladder name —
+    // covers both an owned row genuinely duplicating a catalog tier, and
+    // the catalog being backfilled later so both loops find the same one.
     if (matchedNames.has(ladderMatch.parallel_name)) continue;
     matchedNames.add(ladderMatch.parallel_name);
 
