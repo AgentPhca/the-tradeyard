@@ -285,6 +285,18 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
   // (confirmed against the real import data — see git history). Paging in
   // chunks of 1000 sidesteps whatever cap the server enforces, since no
   // single request asks for more than that.
+  //
+  // The ORDER BY (set_name, team, player_name, card_number) is NOT unique
+  // — several real sets carry more than one catalog row for the exact same
+  // (set_name, team, player_name, card_number), differing only in
+  // insert_set (e.g. a checklist-import row later re-tagged with a
+  // different section heading). Postgres makes no ordering guarantee among
+  // rows that tie on every ORDER BY column, and a concurrent UPDATE against
+  // card_catalog (a backfill script, say) can move a tied row's physical
+  // position — so two separate .range() page fetches can disagree on which
+  // side of a page boundary a tied row falls on, silently dropping it from
+  // every page. `id` is added as a final tiebreaker so the sort order — and
+  // therefore which rows land on which page — is fully deterministic.
   useEffect(() => {
     let cancelled = false;
 
@@ -311,6 +323,7 @@ export function ChecklistAlbum({ cards, targetUserId, readOnly = false, mode }: 
           .order("team")
           .order("player_name")
           .order("card_number")
+          .order("id")
           .range(from, from + pageSize - 1);
 
         const page = data ?? [];

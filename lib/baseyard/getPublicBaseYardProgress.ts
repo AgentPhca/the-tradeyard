@@ -27,6 +27,13 @@ export async function getPublicBaseYardProgress(
   // ILIKE filter here — a plain `insert_set NOT ILIKE '%CHROME%'` would
   // silently drop every row with a NULL insert_set too (NULL ILIKE
   // anything is NULL, not true, in SQL's three-valued logic).
+  //
+  // .order("id") is required, not optional, alongside .range(): with no
+  // ORDER BY at all, Postgres gives no guarantee that two separate page
+  // queries scan rows in the same order — a concurrent write (e.g. a
+  // backfill UPDATE against card_catalog) can change that order between
+  // pages, silently dropping a row that falls through the gap. See
+  // ChecklistAlbum.tsx's identical fetch for the full reasoning.
   const pageSize = 1000;
   const catalogRows: {
     id: string;
@@ -46,6 +53,7 @@ export async function getPublicBaseYardProgress(
       .eq("category", "Base")
       .eq("is_variation_of_base", false)
       .eq("needs_review", false)
+      .order("id")
       .range(from, from + pageSize - 1);
 
     const page = (data ?? []).filter((row) => !isChromeBaseInsertSet(row.insert_set));

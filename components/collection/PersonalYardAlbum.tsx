@@ -137,7 +137,10 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
   }
 
   // Fetched once per mode+value — see ChecklistAlbum for why .range()
-  // chunking (not a single large .limit()) is required.
+  // chunking (not a single large .limit()) is required, and why `id` has
+  // to be the final ORDER BY tiebreaker: (set_name, player_name,
+  // card_number) isn't unique either (same duplicate-insert_set pattern),
+  // so without it a tied row can silently fall through a page boundary.
   useEffect(() => {
     let cancelled = false;
 
@@ -170,6 +173,7 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
           .order("set_name")
           .order("player_name")
           .order("card_number")
+          .order("id")
           .range(from, from + pageSize - 1);
 
         const page = data ?? [];

@@ -36,6 +36,10 @@ export async function getPublicInsertYardProgress(
   // beyond a literal category='Insert' check: an Autograph/Relic-category
   // insert set (e.g. "REAL ONE AUTOGRAPHS", "NFL MATERIAL CARDS") is just
   // as much a trackable checklist as a plain Insert one.
+  //
+  // .order("id") makes the pagination deterministic — see
+  // getPublicBaseYardProgress.ts's identical fetch for why an unordered
+  // .range() can silently drop rows between pages.
   const pageSize = 1000;
   const catalogRows: {
     id: string;
@@ -55,6 +59,7 @@ export async function getPublicInsertYardProgress(
       .or("category.is.null,category.neq.Base")
       .eq("is_variation_of_base", false)
       .eq("needs_review", false)
+      .order("id")
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];

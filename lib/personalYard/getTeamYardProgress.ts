@@ -12,6 +12,9 @@ export interface PersonalYardProgress {
 // card — see lib/utils/cardClassification.ts's isPureBase. Written out as
 // the OR form directly (De Morgan's) rather than a single .not() call,
 // since PostgREST has no clean way to negate an AND-of-two-columns filter.
+// .order("id") makes the .range() pagination below deterministic — see
+// getPublicBaseYardProgress.ts's identical fetch for why an unordered
+// .range() can silently drop rows between pages.
 export async function getTeamYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string,
@@ -36,6 +39,7 @@ export async function getTeamYardProgress(
       .eq("team", team)
       .eq("needs_review", false)
       .or("is_variation_of_base.eq.true,category.is.null,category.neq.Base")
+      .order("id")
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];

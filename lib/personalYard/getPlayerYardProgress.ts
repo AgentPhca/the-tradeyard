@@ -10,7 +10,10 @@ export interface PersonalYardProgress {
 // PlayerYard: every card_catalog slot for this player, no further
 // restriction — Base, every parallel, every insert (deliberately not
 // filtered by is_variation_of_base like BaseYard/TeamYard are, per this
-// yard's own "alles" scope).
+// yard's own "alles" scope). .order("id") makes the .range() pagination
+// below deterministic — see getPublicBaseYardProgress.ts's identical
+// fetch for why an unordered .range() can silently drop rows between
+// pages.
 export async function getPlayerYardProgress(
   supabase: SupabaseClient<Database>,
   ownerId: string,
@@ -33,6 +36,7 @@ export async function getPlayerYardProgress(
       .select("set_name, insert_set, team, player_name, card_number")
       .eq("player_name", player)
       .eq("needs_review", false)
+      .order("id")
       .range(from, from + pageSize - 1);
 
     const page = data ?? [];
