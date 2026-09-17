@@ -6,6 +6,18 @@ import { VisibilityToggle } from "@/components/profile/VisibilityToggle";
 import { createClient } from "@/lib/supabase/server";
 import type { Card } from "@/lib/types/database";
 
+// This page's cards/profile fetches are per-viewer and must always reflect
+// the current DB state — Next.js caches `fetch()` (what the Supabase client
+// uses under the hood) by default even on an otherwise dynamically-rendered
+// route (cookies() here only forces the page itself to re-render per
+// request; it does NOT stop an individual fetch from being served out of
+// Next's persistent Data Cache, which survives across deployments). Without
+// this, a once-cached "cards" response can keep being served indefinitely
+// regardless of how many times the app is redeployed, showing a stale
+// snapshot of the user's own collection (confirmed live-DB data was correct
+// while this page kept showing an outdated BaseYard ownership count).
+export const dynamic = "force-dynamic";
+
 export default async function CollectionPage() {
   const supabase = await createClient();
   const {
