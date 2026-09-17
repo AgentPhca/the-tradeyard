@@ -486,7 +486,12 @@ export function PersonalYardAlbum({ cards, targetUserId, readOnly = false, mode,
               }
 
               const addCardParam = mode === "team" ? "personalTeam" : "personalPlayer";
-              const addCardHref = `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&${addCardParam}=${encodeURIComponent(value)}`;
+              // Carries the currently-selected category (Base/Insert/Value/
+              // Parallel tab) through the round trip too, not just the Set —
+              // otherwise a save lands back on the right Set but resets to
+              // "pick a category", losing the user's place same as a
+              // BaseYard/InsertYard save would if it only restored Set.
+              const addCardHref = `/collection/add?catalogId=${row.id}&set=${encodeURIComponent(setName)}&${addCardParam}=${encodeURIComponent(value)}${category ? `&personalCategory=${encodeURIComponent(category)}` : ""}`;
 
               return (
                 <Link

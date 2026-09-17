@@ -19,7 +19,7 @@ import { allPhotos, coverPhoto } from "@/lib/utils/cardPhotos";
 import { cardValueTag, cardValueTier } from "@/lib/utils/cardValue";
 import { getParallelFrameColor, parallelFrameBackground } from "@/lib/utils/parallelFrameColor";
 import { findMultiPlayerKeys, multiPlayerKey } from "@/lib/utils/multiPlayerCard";
-import { isInsert } from "@/lib/utils/cardClassification";
+import { isInsert, isPureBase } from "@/lib/utils/cardClassification";
 import { typeLabel } from "@/lib/utils/cardType";
 import { getCardParallels } from "@/lib/collection/getCardParallels";
 import type { Card } from "@/lib/types/database";
@@ -272,6 +272,7 @@ export default async function CardDetailPage({
                 setName={card.set_name}
                 team={card.team}
                 insertSet={card.insert_set}
+                isPureBaseCard={isPureBase(card)}
               />
             )}
           </div>

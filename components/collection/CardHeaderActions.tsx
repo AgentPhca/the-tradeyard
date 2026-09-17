@@ -17,28 +17,33 @@ interface CardHeaderActionsProps {
   setName: string | null;
   team: string | null;
   insertSet: string | null;
+  // From lib/utils/cardClassification.ts's isPureBase(card) — the actual
+  // BaseYard-vs-InsertYard signal. NOT the same as "insertSet is filled":
+  // plenty of genuine Base rows carry a raw PDF-section-heading insert_set
+  // like "ROOKIES", so checking insertSet's presence instead of this would
+  // send a Base card's parallel back to InsertYard.
+  isPureBaseCard: boolean;
 }
 
 // Same (set, team)/(set, insertSet) query params BaseYard/InsertYard's own
 // empty-slot links use (see ChecklistAlbum.tsx's addCardHref) — reusing
 // them here is what makes app/(app)/collection/add/page.tsx's existing
 // returnTo logic send the save back to the right checklist afterwards,
-// instead of falling back to plain /collection. insertSet checked first:
-// it's the one field that's actually exclusive to insert cards, whereas an
-// insert card almost always also carries a team (the player's team), so
-// checking team first would misclassify it as a Base-card return.
+// instead of falling back to plain /collection.
 function buildAddParallelHref(
   catalogId: string,
   setName: string | null,
   team: string | null,
-  insertSet: string | null
+  insertSet: string | null,
+  isPureBaseCard: boolean
 ): string {
   const base = `/collection/add?catalogId=${catalogId}`;
-  if (setName && insertSet) {
+  if (isPureBaseCard) {
+    if (setName && team) {
+      return `${base}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`;
+    }
+  } else if (setName && insertSet) {
     return `${base}&set=${encodeURIComponent(setName)}&insertSet=${encodeURIComponent(insertSet)}`;
-  }
-  if (setName && team) {
-    return `${base}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`;
   }
   return base;
 }
@@ -55,6 +60,7 @@ export function CardHeaderActions({
   setName,
   team,
   insertSet,
+  isPureBaseCard,
 }: CardHeaderActionsProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -90,7 +96,7 @@ export function CardHeaderActions({
         </Link>
         {catalogId && (
           <Link
-            href={buildAddParallelHref(catalogId, setName, team, insertSet)}
+            href={buildAddParallelHref(catalogId, setName, team, insertSet, isPureBaseCard)}
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text transition-colors hover:border-primary/40"
           >
             <Layers className="h-3.5 w-3.5" />
