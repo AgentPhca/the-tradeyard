@@ -3,21 +3,59 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2 } from "lucide-react";
+import { Layers, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { createClient } from "@/lib/supabase/client";
 
 interface CardHeaderActionsProps {
   cardId: string;
   playerName: string;
+  // Powers the "Add Parallel" button below — null for a freetext-entered
+  // card with no card_catalog row to prefill from, in which case the
+  // button is simply omitted rather than linking somewhere broken.
+  catalogId: string | null;
+  setName: string | null;
+  team: string | null;
+  insertSet: string | null;
 }
 
-// Owner-only Edit/Delete, split out of the old combined CardDetailActions
-// so it can render as small buttons next to the player name in the title
-// row instead of as full-width buttons further down the page — see
-// CardStatusSelect for the status control, now between the description
-// and the owner-link box.
-export function CardHeaderActions({ cardId, playerName }: CardHeaderActionsProps) {
+// Same (set, team)/(set, insertSet) query params BaseYard/InsertYard's own
+// empty-slot links use (see ChecklistAlbum.tsx's addCardHref) — reusing
+// them here is what makes app/(app)/collection/add/page.tsx's existing
+// returnTo logic send the save back to the right checklist afterwards,
+// instead of falling back to plain /collection. insertSet checked first:
+// it's the one field that's actually exclusive to insert cards, whereas an
+// insert card almost always also carries a team (the player's team), so
+// checking team first would misclassify it as a Base-card return.
+function buildAddParallelHref(
+  catalogId: string,
+  setName: string | null,
+  team: string | null,
+  insertSet: string | null
+): string {
+  const base = `/collection/add?catalogId=${catalogId}`;
+  if (setName && insertSet) {
+    return `${base}&set=${encodeURIComponent(setName)}&insertSet=${encodeURIComponent(insertSet)}`;
+  }
+  if (setName && team) {
+    return `${base}&set=${encodeURIComponent(setName)}&team=${encodeURIComponent(team)}`;
+  }
+  return base;
+}
+
+// Owner-only Edit/Add Parallel/Delete, split out of the old combined
+// CardDetailActions so it can render as small buttons next to the player
+// name in the title row instead of as full-width buttons further down the
+// page — see CardStatusSelect for the status control, now between the
+// description and the owner-link box.
+export function CardHeaderActions({
+  cardId,
+  playerName,
+  catalogId,
+  setName,
+  team,
+  insertSet,
+}: CardHeaderActionsProps) {
   const router = useRouter();
   const supabase = createClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -50,6 +88,15 @@ export function CardHeaderActions({ cardId, playerName }: CardHeaderActionsProps
           <Pencil className="h-3.5 w-3.5" />
           Edit Card
         </Link>
+        {catalogId && (
+          <Link
+            href={buildAddParallelHref(catalogId, setName, team, insertSet)}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-text transition-colors hover:border-primary/40"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Add Parallel
+          </Link>
+        )}
         <button
           type="button"
           onClick={() => setConfirmOpen(true)}

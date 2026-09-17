@@ -264,7 +264,16 @@ export default async function CardDetailPage({
                 </span>
               )}
             </div>
-            {isOwner && <CardHeaderActions cardId={card.id} playerName={card.player_name} />}
+            {isOwner && (
+              <CardHeaderActions
+                cardId={card.id}
+                playerName={card.player_name}
+                catalogId={card.catalog_id}
+                setName={card.set_name}
+                team={card.team}
+                insertSet={card.insert_set}
+              />
+            )}
           </div>
           {card.team && <p className="mt-1.5 text-sm text-muted">{card.team}</p>}
           {card.is_rookie && (
