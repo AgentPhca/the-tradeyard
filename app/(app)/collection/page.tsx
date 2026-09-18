@@ -18,6 +18,42 @@ import type { Card } from "@/lib/types/database";
 // while this page kept showing an outdated BaseYard ownership count).
 export const dynamic = "force-dynamic";
 
+// An unpaginated .select() is silently capped server-side (PostgREST's
+// default max-rows limit) — for an owner with enough cards, this dropped
+// their oldest rows (this query sorts newest-first with no .range()),
+// which showed up as BaseYard/InsertYard suddenly missing most of a
+// collection despite the DB itself being correct. Paginate fully, same
+// pattern as the card_catalog fetches elsewhere (e.g. ChecklistAlbum.tsx),
+// with `id` as a tiebreaker so equal created_at timestamps can't reorder
+// a row across a page boundary and get skipped or duplicated.
+async function fetchAllOwnedCards(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ownerId: string
+): Promise<Card[]> {
+  const pageSize = 1000;
+  const cards: Card[] = [];
+  let from = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data } = await supabase
+      .from("cards")
+      .select("*")
+      .eq("owner_id", ownerId)
+      .neq("status", "traded")
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, from + pageSize - 1);
+
+    const page = data ?? [];
+    cards.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return cards;
+}
+
 export default async function CollectionPage() {
   const supabase = await createClient();
   const {
@@ -29,20 +65,15 @@ export default async function CollectionPage() {
   let personalTeamYard: string | null = null;
   let personalPlayerYard: string | null = null;
   if (user) {
-    const [{ data: cardData }, { data: profile }] = await Promise.all([
-      supabase
-        .from("cards")
-        .select("*")
-        .eq("owner_id", user.id)
-        .neq("status", "traded")
-        .order("created_at", { ascending: false }),
+    const [cardData, { data: profile }] = await Promise.all([
+      fetchAllOwnedCards(supabase, user.id),
       supabase
         .from("profiles")
         .select("show_personal_collection, personal_team_yard, personal_player_yard")
         .eq("id", user.id)
         .single(),
     ]);
-    cards = cardData ?? [];
+    cards = cardData;
     showPersonalCollection = profile?.show_personal_collection ?? false;
     personalTeamYard = profile?.personal_team_yard ?? null;
     personalPlayerYard = profile?.personal_player_yard ?? null;
