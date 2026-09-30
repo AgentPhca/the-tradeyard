@@ -31,6 +31,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local image-compression backups (scripts/compress-existing.mjs)
+/backup
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

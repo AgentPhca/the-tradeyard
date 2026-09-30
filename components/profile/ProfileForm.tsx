@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { NFL_TEAMS } from "@/lib/data/nflTeams";
 import { buildTokenOrFilters, tokenizeSearch } from "@/lib/utils/search";
 import { ROLE_LABEL, SELECTABLE_ROLES } from "@/lib/utils/roles";
+import { ACCEPTED_IMAGE_TYPES, compressImage } from "@/lib/compressImage";
 import type { Profile, UserRole } from "@/lib/types/database";
 
 const PLAYER_SEARCH_MAX_RESULTS = 12;
@@ -83,6 +84,12 @@ export function ProfileForm({ profile }: ProfileFormProps) {
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
+    if (file && !ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])) {
+      setError("Nur JPEG-, PNG- oder WebP-Bilder werden unterstützt.");
+      e.target.value = "";
+      return;
+    }
+    setError(null);
     setAvatar(file);
     setAvatarPreview(file ? URL.createObjectURL(file) : profile.avatar_url);
   }
@@ -129,10 +136,19 @@ export function ProfileForm({ profile }: ProfileFormProps) {
     let avatarUrl = profile.avatar_url;
 
     if (avatar) {
+      let compressed: File;
+      try {
+        compressed = await compressImage(avatar);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Das Bild konnte nicht komprimiert werden.");
+        setSubmitting(false);
+        return;
+      }
+
       const path = `${profile.id}/${crypto.randomUUID()}-${avatar.name}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, avatar);
+        .upload(path, compressed, { contentType: compressed.type });
 
       if (uploadError) {
         setError(uploadError.message);
@@ -204,7 +220,7 @@ export function ProfileForm({ profile }: ProfileFormProps) {
           <input
             id="avatar"
             type="file"
-            accept="image/*"
+            accept={ACCEPTED_IMAGE_TYPES.join(",")}
             className="hidden"
             onChange={handleAvatarChange}
           />

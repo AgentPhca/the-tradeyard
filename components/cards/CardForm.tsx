@@ -15,6 +15,7 @@ import { parallelLabel, titleCase } from "@/lib/utils/text";
 import { buildTokenOrFilters, tokenizeSearch } from "@/lib/utils/search";
 import { catalogRowDisplayLabel, findMultiPlayerKeys } from "@/lib/utils/multiPlayerCard";
 import { isPureBase } from "@/lib/utils/cardClassification";
+import { ACCEPTED_IMAGE_TYPES, compressImage } from "@/lib/compressImage";
 import type {
   Card,
   CardCatalogEntry,
@@ -474,8 +475,16 @@ export function CardForm({ mode, card, initialCatalogId, returnTo, initialStatus
     e.target.value = "";
     if (files.length === 0) return;
 
+    const validFiles = files.filter((file) =>
+      ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])
+    );
+    setError(
+      validFiles.length < files.length ? "Nur JPEG-, PNG- oder WebP-Bilder werden unterstützt." : null
+    );
+    if (validFiles.length === 0) return;
+
     const remainingSlots = MAX_PHOTOS - photos.length;
-    const toAdd = files.slice(0, remainingSlots).map((file) => ({
+    const toAdd = validFiles.slice(0, remainingSlots).map((file) => ({
       key: crypto.randomUUID(),
       previewUrl: URL.createObjectURL(file),
       file,
@@ -558,10 +567,19 @@ export function CardForm({ mode, card, initialCatalogId, returnTo, initialStatus
         continue;
       }
 
+      let compressed: File;
+      try {
+        compressed = await compressImage(p.file);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Das Bild konnte nicht komprimiert werden.");
+        setSubmitting(false);
+        return;
+      }
+
       const path = `${user.id}/${crypto.randomUUID()}-${p.file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("card-photos")
-        .upload(path, p.file);
+        .upload(path, compressed, { contentType: compressed.type });
 
       if (uploadError) {
         setError(uploadError.message);
@@ -743,7 +761,7 @@ export function CardForm({ mode, card, initialCatalogId, returnTo, initialStatus
           <input
             id="photos"
             type="file"
-            accept="image/*"
+            accept={ACCEPTED_IMAGE_TYPES.join(",")}
             multiple
             className="hidden"
             onChange={handleAddPhotos}
