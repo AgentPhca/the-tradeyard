@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { isAdminRequest, updateSession } from "@/lib/supabase/middleware";
 import { isValidPreviewAccessToken, PREVIEW_ACCESS_COOKIE } from "@/lib/preview-access/token";
 
 // Paths that must stay reachable without the preview-access cookie:
@@ -27,6 +27,14 @@ function isExcludedFromPreviewGate(pathname: string): boolean {
   );
 }
 
+// /admin/compress and its API routes (app/api/admin/*) — locked down to a
+// single account. See lib/supabase/middleware.ts's isAdminRequest.
+const ADMIN_PATHS = ["/admin", "/api/admin"];
+
+function isAdminPath(pathname: string): boolean {
+  return ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
@@ -45,6 +53,15 @@ export async function middleware(request: NextRequest) {
       }
       return NextResponse.redirect(url);
     }
+  }
+
+  if (isAdminPath(pathname) && !(await isAdminRequest(request))) {
+    return pathname.startsWith("/api/")
+      ? NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      : new NextResponse("403 – Forbidden", {
+          status: 403,
+          headers: { "content-type": "text/plain" },
+        });
   }
 
   return updateSession(request);
